@@ -8,28 +8,140 @@ let appData = {
 const sqlScripts = [
     {
         title: "1. Master KPI Export (Revenue, Orders, AOV)",
-        query: "SELECT \n    CASE \n        WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '1. Current Month (Apr 26)'\n        WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2. Last Month (Mar 26)'\n        WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '3. Last Year YoY (Apr 25)'\n    END AS reporting_period,\n    COUNT(DISTINCT p.ID) AS total_orders,\n    SUM(pm.meta_value) AS total_revenue,\n    SUM(pm.meta_value) / COUNT(DISTINCT p.ID) AS average_order_value\nFROM wp_posts p\nJOIN wp_postmeta pm ON p.ID = pm.post_id AND pm.meta_key = '_order_total'\nWHERE p.post_type = 'shop_order' \n  AND p.post_status IN ('wc-completed', 'wc-processing')\n  AND (\n      (p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59') OR\n      (p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59') OR\n      (p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59')\n  )\nGROUP BY reporting_period\nORDER BY reporting_period;"\n    },
+        query: `SELECT 
+    CASE 
+        WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '1. Current Month (Apr 26)'
+        WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2. Last Month (Mar 26)'
+        WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '3. Last Year YoY (Apr 25)'
+    END AS reporting_period,
+    COUNT(DISTINCT p.ID) AS total_orders,
+    SUM(pm.meta_value) AS total_revenue,
+    SUM(pm.meta_value) / COUNT(DISTINCT p.ID) AS average_order_value
+FROM wp_posts p
+JOIN wp_postmeta pm ON p.ID = pm.post_id AND pm.meta_key = '_order_total'
+WHERE p.post_type = 'shop_order' 
+  AND p.post_status IN ('wc-completed', 'wc-processing')
+  AND (
+      (p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59') OR
+      (p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59') OR
+      (p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59')
+  )
+GROUP BY reporting_period
+ORDER BY reporting_period;`
+    },
     {
         title: "2. Customer Segmentation (Retail/Trade & Repeat Ratio)",
-        query: "WITH FirstOrders AS (\n    -- Step 1: Find the absolute first purchase date for every customer email\n    SELECT \n        pm_email.meta_value AS customer_email,\n        MIN(p.post_date) AS first_purchase_date\n    FROM wp_posts p\n    JOIN wp_postmeta pm_email ON p.ID = pm_email.post_id AND pm_email.meta_key = '_billing_email'\n    WHERE p.post_type = 'shop_order' \n      AND p.post_status IN ('wc-completed', 'wc-processing')\n    GROUP BY pm_email.meta_value\n),\nTargetOrders AS (\n    -- Step 2: Grab all the orders for our 3 specific time buckets\n    SELECT \n        p.ID AS order_id,\n        CASE \n            WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '1. Current Month (Apr 26)'\n            WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2. Last Month (Mar 26)'\n            WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '3. Last Year YoY (Apr 25)'\n        END AS reporting_period,\n        CASE \n            WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '2026-04-01'\n            WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2026-03-01'\n            WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '2025-04-01'\n        END AS period_start_date,\n        MAX(CASE WHEN pm.meta_key = '_order_total' THEN pm.meta_value END) AS total_amount,\n        MAX(CASE WHEN pm.meta_key = '_billing_email' THEN pm.meta_value END) AS customer_email\n    FROM wp_posts p\n    JOIN wp_postmeta pm ON p.ID = pm.post_id\n    WHERE p.post_type = 'shop_order' \n      AND p.post_status IN ('wc-completed', 'wc-processing')\n      AND (\n          (p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59') OR\n          (p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59') OR\n          (p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59')\n      )\n    GROUP BY p.ID, p.post_date\n)\n-- Step 3: Combine them and classify as New or Repeat based on the bucket's start date\nSELECT \n    t.reporting_period,\n    CASE \n        WHEN f.first_purchase_date < t.period_start_date THEN 'Repeat Customer'\n        ELSE 'New Customer'\n    END AS customer_type,\n    COUNT(t.order_id) AS total_orders,\n    SUM(t.total_amount) AS total_revenue,\n    SUM(t.total_amount) / COUNT(t.order_id) AS average_order_value\nFROM TargetOrders t\nJOIN FirstOrders f ON t.customer_email = f.customer_email\nGROUP BY t.reporting_period, customer_type\nORDER BY t.reporting_period, customer_type;"
+        query: `WITH FirstOrders AS (
+    -- Step 1: Find the absolute first purchase date for every customer email
+    SELECT 
+        pm_email.meta_value AS customer_email,
+        MIN(p.post_date) AS first_purchase_date
+    FROM wp_posts p
+    JOIN wp_postmeta pm_email ON p.ID = pm_email.post_id AND pm_email.meta_key = '_billing_email'
+    WHERE p.post_type = 'shop_order' 
+      AND p.post_status IN ('wc-completed', 'wc-processing')
+    GROUP BY pm_email.meta_value
+),
+TargetOrders AS (
+    -- Step 2: Grab all the orders for our 3 specific time buckets
+    SELECT 
+        p.ID AS order_id,
+        CASE 
+            WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '1. Current Month (Apr 26)'
+            WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2. Last Month (Mar 26)'
+            WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '3. Last Year YoY (Apr 25)'
+        END AS reporting_period,
+        CASE 
+            WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '2026-04-01'
+            WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2026-03-01'
+            WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '2025-04-01'
+        END AS period_start_date,
+        MAX(CASE WHEN pm.meta_key = '_order_total' THEN pm.meta_value END) AS total_amount,
+        MAX(CASE WHEN pm.meta_key = '_billing_email' THEN pm.meta_value END) AS customer_email
+    FROM wp_posts p
+    JOIN wp_postmeta pm ON p.ID = pm.post_id
+    WHERE p.post_type = 'shop_order' 
+      AND p.post_status IN ('wc-completed', 'wc-processing')
+      AND (
+          (p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59') OR
+          (p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59') OR
+          (p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59')
+      )
+    GROUP BY p.ID, p.post_date
+)
+-- Step 3: Combine them and classify as New or Repeat based on the bucket's start date
+SELECT 
+    t.reporting_period,
+    CASE 
+        WHEN f.first_purchase_date < t.period_start_date THEN 'Repeat Customer'
+        ELSE 'New Customer'
+    END AS customer_type,
+    COUNT(t.order_id) AS total_orders,
+    SUM(t.total_amount) AS total_revenue,
+    SUM(t.total_amount) / COUNT(t.order_id) AS average_order_value
+FROM TargetOrders t
+JOIN FirstOrders f ON t.customer_email = f.customer_email
+GROUP BY t.reporting_period, customer_type
+ORDER BY t.reporting_period, customer_type;`
     },
     {
         title: "3. Fulfillment & Shipping Analysis",
-        query: "-- Shipping & Delivery Tab: Breakdown of Click & Collect vs Delivery\nSELECT \n    o.shipping_description as method_name,\n    CASE \n        WHEN o.shipping_method LIKE '%clickandcollect%' THEN 'Click & Collect'\n        WHEN o.shipping_method LIKE '%machinery%' THEN 'Machinery Delivery'\n        WHEN o.shipping_method LIKE '%pallet%' THEN 'Standard Pallet'\n        ELSE 'Standard Delivery'\n    END as fulfillment_category,\n    COUNT(o.entity_id) as volume,\n    SUM(o.base_shipping_amount) as shipping_revenue,\n    SUM(o.base_grand_total) as total_order_revenue\nFROM sales_order o\nWHERE o.created_at >= '2026-04-01'\nAND o.status != 'canceled'\nGROUP BY 1, 2\nORDER BY volume DESC;"
+        query: `-- Shipping & Delivery Tab: Breakdown of Click & Collect vs Delivery
+SELECT 
+    o.shipping_description as method_name,
+    CASE 
+        WHEN o.shipping_method LIKE '%clickandcollect%' THEN 'Click & Collect'
+        WHEN o.shipping_method LIKE '%machinery%' THEN 'Machinery Delivery'
+        WHEN o.shipping_method LIKE '%pallet%' THEN 'Standard Pallet'
+        ELSE 'Standard Delivery'
+    END as fulfillment_category,
+    COUNT(o.entity_id) as volume,
+    SUM(o.base_shipping_amount) as shipping_revenue,
+    SUM(o.base_grand_total) as total_order_revenue
+FROM sales_order o
+WHERE o.created_at >= '2026-04-01'
+AND o.status != 'canceled'
+GROUP BY 1, 2
+ORDER BY volume DESC;`
     },
     {
         title: "4. Product Category & SKU Performance (Fencing vs Machinery)",
-        query: "-- Product Performance Tab: Identify Movers & Shakers\nSELECT \n    i.sku,\n    i.name as product_name,\n    parent_cat.name as category,\n    SUM(i.qty_ordered) as units_sold,\n    SUM(i.base_row_total) as gmv,\n    'Requires Month-over-Month Join' as trend\nFROM sales_order_item i\nJOIN sales_order o ON i.order_id = o.entity_id\nJOIN catalog_category_product cp ON i.product_id = cp.product_id\nJOIN catalog_category_entity_varchar parent_cat ON cp.category_id = parent_cat.entity_id\n    AND parent_cat.attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'name')\nWHERE o.created_at >= '2026-04-01'\nAND parent_cat.name IN ('Fencing', 'Garden Machinery', 'Power Tools', 'STIHL')\nGROUP BY 1, 2, 3\nORDER BY gmv DESC;"
+        query: `-- Product Performance Tab: Identify Movers & Shakers
+SELECT 
+    i.sku,
+    i.name as product_name,
+    parent_cat.name as category,
+    SUM(i.qty_ordered) as units_sold,
+    SUM(i.base_row_total) as gmv,
+    'Requires Month-over-Month Join' as trend
+FROM sales_order_item i
+JOIN sales_order o ON i.order_id = o.entity_id
+JOIN catalog_category_product cp ON i.product_id = cp.product_id
+JOIN catalog_category_entity_varchar parent_cat ON cp.category_id = parent_cat.entity_id
+    AND parent_cat.attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'name')
+WHERE o.created_at >= '2026-04-01'
+AND parent_cat.name IN ('Fencing', 'Garden Machinery', 'Power Tools', 'STIHL')
+GROUP BY 1, 2, 3
+ORDER BY gmv DESC;`
     },
     {
         title: "5. Payment Gateway Distribution",
-        query: "-- Payment Methods Tab: Card vs PayPal vs Finance\nSELECT \n    p.method as gateway_code,\n    COUNT(o.entity_id) as transaction_volume,\n    SUM(o.base_grand_total) as total_revenue\nFROM sales_order o\nJOIN sales_order_payment p ON o.entity_id = p.parent_id\nWHERE o.created_at >= '2026-04-01'\nGROUP BY 1\nORDER BY transaction_volume DESC;"
+        query: `-- Payment Methods Tab: Card vs PayPal vs Finance
+SELECT 
+    p.method as gateway_code,
+    COUNT(o.entity_id) as transaction_volume,
+    SUM(o.base_grand_total) as total_revenue
+FROM sales_order o
+JOIN sales_order_payment p ON o.entity_id = p.parent_id
+WHERE o.created_at >= '2026-04-01'
+GROUP BY 1
+ORDER BY transaction_volume DESC;`
     }
 ];
 
 // Initialize the Application
 document.addEventListener('DOMContentLoaded', function() {
-    console.log("App Initialized v1.0.3");
+    console.log("App Initialized v1.0.7");
     initTabs();
     initFileUpload();
     initSqlRepository();
@@ -66,6 +178,8 @@ function initFileUpload() {
     var fileInput = document.getElementById('csvFileInput');
     var statusText = document.getElementById('uploadStatus');
 
+    if (!fileInput) return;
+
     fileInput.addEventListener('change', function(e) {
         var file = e.target.files[0];
         if (file) {
@@ -78,7 +192,7 @@ function initFileUpload() {
                 complete: function(results) {
                     appData.raw = results.data;
                     statusText.textContent = "Loaded " + results.data.length + " rows successfully.";
-                    statusText.style.color = 'var(--primary-green)';
+                    statusText.style.color = '#009640';
                     processData(results.data);
                     updateDashboards();
                 },
@@ -97,9 +211,13 @@ function processData(data) {
 }
 
 function updateDashboards() {
-    document.getElementById('kpi-orders').textContent = Math.floor(Math.random() * 2000) + 500;
-    document.getElementById('kpi-revenue').textContent = '\u00A3' + (Math.floor(Math.random() * 150000) + 50000).toLocaleString();
-    document.getElementById('kpi-aov').textContent = '\u00A3' + (Math.floor(Math.random() * 150) + 80);
+    const kpiOrders = document.getElementById('kpi-orders');
+    const kpiRevenue = document.getElementById('kpi-revenue');
+    const kpiAov = document.getElementById('kpi-aov');
+
+    if (kpiOrders) kpiOrders.textContent = Math.floor(Math.random() * 2000) + 500;
+    if (kpiRevenue) kpiRevenue.textContent = '£' + (Math.floor(Math.random() * 150000) + 50000).toLocaleString();
+    if (kpiAov) kpiAov.textContent = '£' + (Math.floor(Math.random() * 150) + 80);
 
     renderCharts();
     fillTables();
@@ -109,15 +227,15 @@ function renderCharts() {
     // Tab 2: Customer Split
     renderDonutChart('retailTradeChart', ['Retail', 'Trade'], [65, 35], ['#009640', '#FFE600']);
     renderDonutChart('repeatNewChart', ['Repeat', 'New'], [78, 22], ['#373737', '#94A3B8']);
-    renderBarChart('basketSizeChart', ['Retail', 'Trade'], [92, 245], 'Avg Basket Size (\u00A3)', '#009640');
+    renderBarChart('basketSizeChart', ['Retail', 'Trade'], [92, 245], 'Avg Basket Size (£)', '#009640');
 
     // Tab 3: Shipping & Delivery
     renderBarChart('fulfillmentVolumeChart', ['Standard Delivery', 'Click & Collect', 'Machinery'], [500, 320, 180], 'Orders', '#373737', 'y');
-    renderBarChart('fulfillmentRevenueChart', ['Standard Delivery', 'Click & Collect', 'Machinery'], [42000, 21000, 32000], 'Revenue (\u00A3)', '#009640', 'y');
+    renderBarChart('fulfillmentRevenueChart', ['Standard Delivery', 'Click & Collect', 'Machinery'], [42000, 21000, 32000], 'Revenue (£)', '#009640', 'y');
     renderBarChart('specializedDeliveryChart', ['Standard Pallet', 'Machinery Delivery', 'Oversized'], [140, 95, 55], 'Volume', '#FFE600');
 
     // Tab 4: Product Performance
-    renderBarChart('categoryComparisonChart', ['Fencing', 'Garden Machinery', 'STIHL Batteries'], [135000, 92000, 45000], 'GMV (\u00A3)', '#009640');
+    renderBarChart('categoryComparisonChart', ['Fencing', 'Garden Machinery', 'STIHL Batteries'], [135000, 92000, 45000], 'GMV (£)', '#009640');
 
     // Tab 5: Payment Methods
     renderPieChart('paymentVolumeChart', ['Card (Stripe)', 'PayPal', 'BACS'], [65, 25, 10]);
@@ -173,9 +291,9 @@ function renderBarChart(canvasId, labels, data, datasetLabel, color, axis) {
 function fillTables() {
     var topPerformersTbody = document.querySelector('#topPerformersTable tbody');
     if (topPerformersTbody) {
-        topPerformersTbody.innerHTML = '<tr><td>BR-101</td><td>Closeboard Panel 6x6</td><td>480</td><td>\u00A314,400</td></tr>'
-            + '<tr><td>STIHL-AP300S</td><td>AP 300 S Battery</td><td>125</td><td>\u00A312,375</td></tr>'
-            + '<tr><td>BR-202</td><td>Gravel Board 2.4m</td><td>890</td><td>\u00A37,120</td></tr>';
+        topPerformersTbody.innerHTML = '<tr><td>BR-101</td><td>Closeboard Panel 6x6</td><td>480</td><td>£14,400</td></tr>'
+            + '<tr><td>STIHL-AP300S</td><td>AP 300 S Battery</td><td>125</td><td>£12,375</td></tr>'
+            + '<tr><td>BR-202</td><td>Gravel Board 2.4m</td><td>890</td><td>£7,120</td></tr>';
     }
 
     var moversTbody = document.querySelector('#moversTable tbody');
