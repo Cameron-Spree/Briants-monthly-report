@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Briants Monthly Report Dashboard</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CodeMirror CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles_v2.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="logo-area">
+            <h1>Briants Monthly Report Dashboard</h1>
+        </div>
+        <div class="upload-zone" id="fileUploadZone">
+            <input type="file" id="csvFileInput" accept=".csv" />
+            <label for="csvFileInput" class="btn-primary">Upload CSV Data</label>
+            <span id="uploadStatus">No file uploaded</span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <aside class="sidebar">
+            <nav class="tabs" id="tabNav">
+                <button class="tab-btn active" data-target="tab-executive">Executive Summary</button>
+                <button class="tab-btn" data-target="tab-customer">Customer Split</button>
+                <button class="tab-btn" data-target="tab-shipping">Shipping & Delivery</button>
+                <button class="tab-btn" data-target="tab-product">Product Performance</button>
+                <button class="tab-btn" data-target="tab-payment">Payment Methods</button>
+                <button class="tab-btn" data-target="tab-sql">SQL Developer Hub</button>
+            </nav>
+            
+            <div class="api-key-zone">
+                <label for="geminiApiKey">Gemini API Key</label>
+                <input type="password" id="geminiApiKey" placeholder="Enter API Key for Insights" />
+            </div>
+        </aside>
+
+        <main class="content-area">
+            <!-- Tab 1: Executive Summary -->
+            <section id="tab-executive" class="tab-content active">
+                <h2 class="section-title">Executive Summary</h2>
+                
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <h4>Total Revenue</h4>
+                        <div class="kpi-value" id="kpi-revenue">--</div>
+                        <div class="kpi-trend trend-up" id="kpi-revenue-trend">+12.4% MoM</div>
+                    </div>
+                    <div class="kpi-card">
+                        <h4>Total Orders</h4>
+                        <div class="kpi-value" id="kpi-orders">--</div>
+                        <div class="kpi-trend trend-up" id="kpi-orders-trend">+8.2% MoM</div>
+                    </div>
+                    <div class="kpi-card">
+                        <h4>AOV</h4>
+                        <div class="kpi-value" id="kpi-aov">--</div>
+                        <div class="kpi-trend trend-down" id="kpi-aov-trend">-2.1% MoM</div>
+                    </div>
+                </div>
+
+                <div class="insights-card">
+                    <div class="card-header">
+                        <h3>AI Automated Summary</h3>
+                        <button id="generateInsightsBtn" class="btn-primary">Generate Insights</button>
+                    </div>
+                    <div id="insightsContent" class="insights-body">
+                        <p class="placeholder-text">Upload data and provide an API key to generate an automated executive summary based on the latest Briants metrics.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 2: Customer Split -->
+            <section id="tab-customer" class="tab-content">
+                <h2 class="section-title">Customer Split</h2>
+                
+                <div class="dashboard-grid">
+                    <div class="chart-card">
+                        <h3>Retail vs Trade (Revenue)</h3>
+                        <div class="chart-container donut-container">
+                            <canvas id="retailTradeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Repeat vs New Customers (Orders)</h3>
+                        <div class="chart-container donut-container">
+                            <canvas id="repeatNewChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>Average Basket Size</h3>
+                    <div class="chart-container">
+                        <canvas id="basketSizeChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 3: Shipping & Delivery -->
+            <section id="tab-shipping" class="tab-content">
+                <h2 class="section-title">Shipping & Delivery</h2>
+                
+                <div class="dashboard-grid">
+                    <div class="chart-card">
+                        <h3>Fulfillment Methods (Volume)</h3>
+                        <div class="chart-container">
+                            <canvas id="fulfillmentVolumeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Fulfillment Methods (Revenue)</h3>
+                        <div class="chart-container">
+                            <canvas id="fulfillmentRevenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>Specialized Delivery Breakdown</h3>
+                    <div class="chart-container">
+                        <canvas id="specializedDeliveryChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 4: Product Performance -->
+            <section id="tab-product" class="tab-content">
+                <h2 class="section-title">Product Performance</h2>
+                
+                <div class="card">
+                    <h3 class="product-category-heading">Fencing vs Garden Machinery (Revenue)</h3>
+                    <div class="chart-container">
+                        <canvas id="categoryComparisonChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3 class="product-category-heading">Top Performers</h3>
+                        <div class="table-container">
+                            <table class="data-table" id="topPerformersTable">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Product Name</th>
+                                        <th>Units</th>
+                                        <th>GMV</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 class="product-category-heading">Movers & Shakers</h3>
+                        <div class="table-container">
+                            <table class="data-table" id="moversTable">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Product Name</th>
+                                        <th>Growth</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 5: Payment Methods -->
+            <section id="tab-payment" class="tab-content">
+                <h2 class="section-title">Payment Methods</h2>
+                
+                <div class="dashboard-grid">
+                    <div class="chart-card">
+                        <h3>Transaction Volume Split</h3>
+                        <div class="chart-container donut-container">
+                            <canvas id="paymentVolumeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Revenue Split</h3>
+                        <div class="chart-container donut-container">
+                            <canvas id="paymentRevenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 6: SQL Developer Hub -->
+            <section id="tab-sql" class="tab-content">
+                <h2 class="section-title">SQL Developer Hub</h2>
+                <div class="card info-alert" style="border-left: 5px solid var(--accent-yellow); background: #FFFBEB; margin-bottom: 2rem;">
+                    <p><strong>SQL Data Prep Guide:</strong> Use these queries in your SQL editor (e.g., DBeaver) to pull the correct datasets from Magento. Export the results as a CSV file to power the dashboard visualizations.</p>
+                </div>
+                <div class="sql-scripts-container" id="sqlScriptsContainer">
+                    <!-- Script Blocks injected via JS -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Version Number -->
+    <div style="position: fixed; bottom: 10px; right: 10px; font-size: 12px; color: #94A3B8; background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 4px; z-index: 1000;">
+        v1.0.2
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- CodeMirror Core and Modes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+    
+    <script src="app_v2.js"></script>
+</body>
+</html>
