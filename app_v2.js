@@ -86,23 +86,29 @@ ORDER BY t.reporting_period, customer_type;`
     },
     {
         title: "3. Fulfillment & Shipping Analysis",
-        query: `-- Shipping & Delivery Tab: Breakdown of Click & Collect vs Delivery
-SELECT 
-    o.shipping_description as method_name,
+        query: `SELECT 
     CASE 
-        WHEN o.shipping_method LIKE '%clickandcollect%' THEN 'Click & Collect'
-        WHEN o.shipping_method LIKE '%machinery%' THEN 'Machinery Delivery'
-        WHEN o.shipping_method LIKE '%pallet%' THEN 'Standard Pallet'
-        ELSE 'Standard Delivery'
-    END as fulfillment_category,
-    COUNT(o.entity_id) as volume,
-    SUM(o.base_shipping_amount) as shipping_revenue,
-    SUM(o.base_grand_total) as total_order_revenue
-FROM sales_order o
-WHERE o.created_at >= '2026-04-01'
-AND o.status != 'canceled'
-GROUP BY 1, 2
-ORDER BY volume DESC;`
+        WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '1. Current Month (Apr 26)'
+        WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2. Last Month (Mar 26)'
+        WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '3. Last Year YoY (Apr 25)'
+    END AS reporting_period,
+    woi.order_item_name AS shipping_method_name,
+    COUNT(DISTINCT p.ID) AS total_orders,
+    SUM(pm_total.meta_value) AS total_order_revenue,
+    SUM(woim_cost.meta_value) AS total_shipping_revenue
+FROM wp_posts p
+JOIN wp_postmeta pm_total ON p.ID = pm_total.post_id AND pm_total.meta_key = '_order_total'
+JOIN wp_woocommerce_order_items woi ON p.ID = woi.order_id AND woi.order_item_type = 'shipping'
+LEFT JOIN wp_woocommerce_order_itemmeta woim_cost ON woi.order_item_id = woim_cost.order_item_id AND woim_cost.meta_key = 'cost'
+WHERE p.post_type = 'shop_order'
+  AND p.post_status IN ('wc-completed', 'wc-processing')
+  AND (
+      (p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59') OR
+      (p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59') OR
+      (p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59')
+  )
+GROUP BY reporting_period, shipping_method_name
+ORDER BY reporting_period ASC, total_order_revenue DESC;`
     },
     {
         title: "4. Product Category & SKU Performance (Fencing vs Machinery)",
