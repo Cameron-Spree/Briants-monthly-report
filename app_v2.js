@@ -1,4 +1,4 @@
-﻿// Global State
+// Global State
 let appData = {
     executive: null,
     customer: null,
@@ -254,20 +254,42 @@ document.addEventListener('DOMContentLoaded', async function() {
     const defA = fmt(now);
     const defB = fmt(prevMonth);
     
-    function initPicker(idA, idB, key) {
-        const a = document.getElementById(idA);
-        const b = document.getElementById(idB);
-        if (a && b) {
-            a.value = defA; b.value = defB;
-            window[key + 'A'] = defA; window[key + 'B'] = defB;
-            a.addEventListener('change', () => { window[key + 'A'] = a.value; updateDashboards(); });
-            b.addEventListener('change', () => { window[key + 'B'] = b.value; updateDashboards(); });
-        }
+    // Customer tab pickers
+    const custA = document.getElementById('customerMonthA');
+    const custB = document.getElementById('customerMonthB');
+    if (custA && custB) {
+        custA.value = defA; custB.value = defB;
+        customerMonthA = defA; customerMonthB = defB;
+        custA.addEventListener('change', () => { customerMonthA = custA.value; updateDashboards(); });
+        custB.addEventListener('change', () => { customerMonthB = custB.value; updateDashboards(); });
     }
-    initPicker('customerMonthA', 'customerMonthB', 'customerMonth');
-    initPicker('shippingMonthA', 'shippingMonthB', 'shippingMonth');
-    initPicker('paymentMonthA', 'paymentMonthB', 'paymentMonth');
-    initPicker('productTableMonthA', 'productTableMonthB', 'productTableMonth');
+    // Shipping tab pickers
+    const shipA = document.getElementById('shippingMonthA');
+    const shipB = document.getElementById('shippingMonthB');
+    if (shipA && shipB) {
+        shipA.value = defA; shipB.value = defB;
+        shippingMonthA = defA; shippingMonthB = defB;
+        shipA.addEventListener('change', () => { shippingMonthA = shipA.value; updateDashboards(); });
+        shipB.addEventListener('change', () => { shippingMonthB = shipB.value; updateDashboards(); });
+    }
+    // Payment tab pickers
+    const payA = document.getElementById('paymentMonthA');
+    const payB = document.getElementById('paymentMonthB');
+    if (payA && payB) {
+        payA.value = defA; payB.value = defB;
+        paymentMonthA = defA; paymentMonthB = defB;
+        payA.addEventListener('change', () => { paymentMonthA = payA.value; updateDashboards(); });
+        payB.addEventListener('change', () => { paymentMonthB = payB.value; updateDashboards(); });
+    }
+    // Product table pickers
+    const prodA = document.getElementById('productTableMonthA');
+    const prodB = document.getElementById('productTableMonthB');
+    if (prodA && prodB) {
+        prodA.value = defA; prodB.value = defB;
+        productTableMonthA = defA; productTableMonthB = defB;
+        prodA.addEventListener('change', () => { productTableMonthA = prodA.value; updateDashboards(); });
+        prodB.addEventListener('change', () => { productTableMonthB = prodB.value; updateDashboards(); });
+    }
 
     const savedData = await loadAppDataFromDB();
     if (savedData && (savedData.executive || savedData.customer || savedData.shipping || savedData.product || savedData.payment)) {
