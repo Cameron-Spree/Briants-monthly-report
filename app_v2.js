@@ -7,117 +7,107 @@ let appData = {
     payment: null
 };
 
-// SQL Queries for Developer Tab
+let currentDashboardMonth = "";
+
 let currentSqlScripts = [];
 let cmInstances = [];
 
-// SQL Queries for Developer Tab
-function generateSqlScripts(yearMonth) {
-    let [year, month] = yearMonth.split('-').map(Number);
-    
-    // Current Month
-    let currentStart = new Date(year, month - 1, 1);
-    let currentEnd = new Date(year, month, 0);
-    
-    // Last Month
-    let lastMonthStart = new Date(year, month - 2, 1);
-    let lastMonthEnd = new Date(year, month - 1, 0);
-    
-    // Last Year
-    let lastYearStart = new Date(year - 1, month - 1, 1);
-    let lastYearEnd = new Date(year - 1, month, 0);
-    
-    // Format to YYYY-MM-DD
-    const formatDate = (d) => {
-        let m = (d.getMonth() + 1).toString().padStart(2, '0');
-        let day = d.getDate().toString().padStart(2, '0');
-        return `${d.getFullYear()}-${m}-${day}`;
-    };
-    
-    let curStartStr = formatDate(currentStart);
-    let curEndStr = formatDate(currentEnd);
-    let prevStartStr = formatDate(lastMonthStart);
-    let prevEndStr = formatDate(lastMonthEnd);
-    let yoyStartStr = formatDate(lastYearStart);
-    let yoyEndStr = formatDate(lastYearEnd);
-    
-    // Format labels: "Apr 26"
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const formatLabel = (d) => `${monthNames[d.getMonth()]} ${d.getFullYear().toString().substring(2)}`;
-    
-    let curLabel = formatLabel(currentStart);
-    let prevLabel = formatLabel(lastMonthStart);
-    let yoyLabel = formatLabel(lastYearStart);
+// IndexedDB Persistence Wrapper
+const DB_NAME = 'BriantsReportDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'csvData';
 
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME);
+            }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+async function saveAppDataToDB() {
+    try {
+        const db = await initDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put(appData, 'appDataState');
+        console.log('Saved appData to IndexedDB');
+    } catch (e) {
+        console.error('Failed to save to IndexedDB', e);
+    }
+}
+
+async function loadAppDataFromDB() {
+    try {
+        const db = await initDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.get('appDataState');
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error('Failed to load from IndexedDB', e);
+        return null;
+    }
+}
+
+
+// SQL Queries for Developer Tab
+function generateSqlScripts() {
     return [
         {
             title: "1. Master KPI Export (Revenue, Orders, AOV)",
             query: `SELECT 
-    CASE 
-        WHEN p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59' THEN '1. Current Month (${curLabel})'
-        WHEN p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59' THEN '2. Last Month (${prevLabel})'
-        WHEN p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59' THEN '3. Last Year YoY (${yoyLabel})'
-    END AS reporting_period,
+    DATE_FORMAT(p.post_date, '%Y-%m') AS \`Reporting Month\`,
     COUNT(DISTINCT p.ID) AS total_orders,
     SUM(pm.meta_value) AS total_revenue,
     SUM(pm.meta_value) / COUNT(DISTINCT p.ID) AS average_order_value
 FROM wp_posts p
 JOIN wp_postmeta pm ON p.ID = pm.post_id AND pm.meta_key = '_order_total'
 WHERE p.post_type = 'shop_order' 
-  AND p.post_status IN ('wc-completed', 'wc-processing')
-  AND (
-      (p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59') OR
-      (p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59') OR
-      (p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59')
-  )
-GROUP BY reporting_period
-ORDER BY reporting_period;`
+  AND p.post_status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+  AND p.post_date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+GROUP BY \`Reporting Month\`
+ORDER BY \`Reporting Month\` DESC;`
         },
         {
             title: "2. Customer Segmentation (Retail/Trade & Repeat Ratio)",
             query: `WITH FirstOrders AS (
-    -- Step 1: Find the absolute first purchase date for every customer email
     SELECT 
         pm_email.meta_value AS customer_email,
         MIN(p.post_date) AS first_purchase_date
     FROM wp_posts p
     JOIN wp_postmeta pm_email ON p.ID = pm_email.post_id AND pm_email.meta_key = '_billing_email'
     WHERE p.post_type = 'shop_order' 
-      AND p.post_status IN ('wc-completed', 'wc-processing')
+      AND p.post_status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
     GROUP BY pm_email.meta_value
 ),
 TargetOrders AS (
-    -- Step 2: Grab all the orders for our 3 specific time buckets
     SELECT 
         p.ID AS order_id,
-        CASE 
-            WHEN p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59' THEN '1. Current Month (${curLabel})'
-            WHEN p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59' THEN '2. Last Month (${prevLabel})'
-            WHEN p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59' THEN '3. Last Year YoY (${yoyLabel})'
-        END AS reporting_period,
-        CASE 
-            WHEN p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59' THEN '${curStartStr}'
-            WHEN p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59' THEN '${prevStartStr}'
-            WHEN p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59' THEN '${yoyStartStr}'
-        END AS period_start_date,
+        DATE_FORMAT(p.post_date, '%Y-%m') AS \`Reporting Month\`,
+        p.post_date,
         MAX(CASE WHEN pm.meta_key = '_order_total' THEN pm.meta_value END) AS total_amount,
         MAX(CASE WHEN pm.meta_key = '_billing_email' THEN pm.meta_value END) AS customer_email
     FROM wp_posts p
     JOIN wp_postmeta pm ON p.ID = pm.post_id
     WHERE p.post_type = 'shop_order' 
-      AND p.post_status IN ('wc-completed', 'wc-processing')
-      AND (
-          (p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59') OR
-          (p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59') OR
-          (p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59')
-      )
+      AND p.post_status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+      AND p.post_date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
     GROUP BY p.ID, p.post_date
 )
--- Step 3: Combine them and classify as New or Repeat based on the bucket's start date
 SELECT 
-    t.reporting_period,
+    t.\`Reporting Month\`,
     CASE 
-        WHEN f.first_purchase_date < t.period_start_date THEN 'Repeat Customer'
+        WHEN f.first_purchase_date < t.post_date THEN 'Repeat Customer'
         ELSE 'New Customer'
     END AS customer_type,
     COUNT(t.order_id) AS total_orders,
@@ -125,17 +115,13 @@ SELECT
     SUM(t.total_amount) / COUNT(t.order_id) AS average_order_value
 FROM TargetOrders t
 JOIN FirstOrders f ON t.customer_email = f.customer_email
-GROUP BY t.reporting_period, customer_type
-ORDER BY t.reporting_period, customer_type;`
+GROUP BY t.\`Reporting Month\`, customer_type
+ORDER BY t.\`Reporting Month\` DESC, customer_type;`
         },
         {
             title: "3. Fulfillment & Shipping Analysis",
             query: `SELECT 
-    CASE 
-        WHEN p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59' THEN '1. Current Month (${curLabel})'
-        WHEN p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59' THEN '2. Last Month (${prevLabel})'
-        WHEN p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59' THEN '3. Last Year YoY (${yoyLabel})'
-    END AS reporting_period,
+    DATE_FORMAT(p.post_date, '%Y-%m') AS \`Reporting Month\`,
     woi.order_item_name AS shipping_method_name,
     COUNT(DISTINCT p.ID) AS total_orders,
     SUM(pm_total.meta_value) AS total_order_revenue,
@@ -146,32 +132,19 @@ JOIN wp_woocommerce_order_items woi ON p.ID = woi.order_id AND woi.order_item_ty
 LEFT JOIN wp_woocommerce_order_itemmeta woim_cost ON woi.order_item_id = woim_cost.order_item_id AND woim_cost.meta_key = 'cost'
 WHERE p.post_type = 'shop_order'
   AND p.post_status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
-  AND (
-      (p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59') OR
-      (p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59') OR
-      (p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59')
-  )
-GROUP BY reporting_period, shipping_method_name
-ORDER BY reporting_period, total_orders DESC;`
+  AND p.post_date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+GROUP BY \`Reporting Month\`, shipping_method_name
+ORDER BY \`Reporting Month\` DESC, total_orders DESC;`
         },
         {
             title: "4. Product Performance Deep Dive",
             query: `SELECT
+    DATE_FORMAT(opl.date_created, '%Y-%m') AS \`Reporting Month\`,
     COALESCE(NULLIF(var_p.post_title, ''), parent_p.post_title) AS \`Product title\`,
     pm_sku.meta_value AS \`SKU\`,
-
-    sales.\`${curLabel} Units\`,
-    sales.\`${curLabel} N. Revenue\`,
-    sales.\`${curLabel} Orders\`,
-
-    sales.\`${prevLabel} Units\`,
-    sales.\`${prevLabel} N. Revenue\`,
-    sales.\`${prevLabel} Orders\`,
-
-    sales.\`${yoyLabel} Units\`,
-    sales.\`${yoyLabel} N. Revenue\`,
-    sales.\`${yoyLabel} Orders\`,
-
+    SUM(opl.product_qty) AS \`Units\`,
+    SUM(opl.product_net_revenue) AS \`N. Revenue\`,
+    COUNT(DISTINCT opl.order_id) AS \`Orders\`,
     (
         SELECT GROUP_CONCAT(t.name SEPARATOR ', ')
         FROM wp_term_relationships tr
@@ -180,180 +153,82 @@ ORDER BY reporting_period, total_orders DESC;`
            AND tt.taxonomy = 'product_cat'
         JOIN wp_terms t
             ON t.term_id = tt.term_id
-        WHERE tr.object_id = sales.product_id
+        WHERE tr.object_id = opl.product_id
     ) AS \`Category\`
-
-FROM (
-    SELECT
-        opl.product_id,
-        opl.variation_id,
-
-        SUM(
-            CASE
-                WHEN opl.date_created >= '${curStartStr} 00:00:00'
-                 AND opl.date_created <= '${curEndStr} 23:59:59'
-                THEN opl.product_qty
-                ELSE 0
-            END
-        ) AS \`${curLabel} Units\`,
-
-        SUM(
-            CASE
-                WHEN opl.date_created >= '${curStartStr} 00:00:00'
-                 AND opl.date_created <= '${curEndStr} 23:59:59'
-                THEN opl.product_net_revenue
-                ELSE 0
-            END
-        ) AS \`${curLabel} N. Revenue\`,
-
-        COUNT(
-            DISTINCT CASE
-                WHEN opl.date_created >= '${curStartStr} 00:00:00'
-                 AND opl.date_created <= '${curEndStr} 23:59:59'
-                THEN opl.order_id
-            END
-        ) AS \`${curLabel} Orders\`,
-
-
-        SUM(
-            CASE
-                WHEN opl.date_created >= '${prevStartStr} 00:00:00'
-                 AND opl.date_created <= '${prevEndStr} 23:59:59'
-                THEN opl.product_qty
-                ELSE 0
-            END
-        ) AS \`${prevLabel} Units\`,
-
-        SUM(
-            CASE
-                WHEN opl.date_created >= '${prevStartStr} 00:00:00'
-                 AND opl.date_created <= '${prevEndStr} 23:59:59'
-                THEN opl.product_net_revenue
-                ELSE 0
-            END
-        ) AS \`${prevLabel} N. Revenue\`,
-
-        COUNT(
-            DISTINCT CASE
-                WHEN opl.date_created >= '${prevStartStr} 00:00:00'
-                 AND opl.date_created <= '${prevEndStr} 23:59:59'
-                THEN opl.order_id
-            END
-        ) AS \`${prevLabel} Orders\`,
-
-
-        SUM(
-            CASE
-                WHEN opl.date_created >= '${yoyStartStr} 00:00:00'
-                 AND opl.date_created <= '${yoyEndStr} 23:59:59'
-                THEN opl.product_qty
-                ELSE 0
-            END
-        ) AS \`${yoyLabel} Units\`,
-
-        SUM(
-            CASE
-                WHEN opl.date_created >= '${yoyStartStr} 00:00:00'
-                 AND opl.date_created <= '${yoyEndStr} 23:59:59'
-                THEN opl.product_net_revenue
-                ELSE 0
-            END
-        ) AS \`${yoyLabel} N. Revenue\`,
-
-        COUNT(
-            DISTINCT CASE
-                WHEN opl.date_created >= '${yoyStartStr} 00:00:00'
-                 AND opl.date_created <= '${yoyEndStr} 23:59:59'
-                THEN opl.order_id
-            END
-        ) AS \`${yoyLabel} Orders\`
-
-    FROM wp_wc_order_product_lookup opl
-    JOIN wp_wc_order_stats os
-        ON os.order_id = opl.order_id
-
-    WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
-      AND (
-            (
-                opl.date_created >= '${curStartStr} 00:00:00'
-                AND opl.date_created <= '${curEndStr} 23:59:59'
-            )
-         OR (
-                opl.date_created >= '${prevStartStr} 00:00:00'
-                AND opl.date_created <= '${prevEndStr} 23:59:59'
-            )
-         OR (
-                opl.date_created >= '${yoyStartStr} 00:00:00'
-                AND opl.date_created <= '${yoyEndStr} 23:59:59'
-            )
-      )
-
-    GROUP BY
-        opl.product_id,
-        opl.variation_id
-
-) AS sales
-
+FROM wp_wc_order_product_lookup opl
+JOIN wp_wc_order_stats os
+    ON os.order_id = opl.order_id
 LEFT JOIN wp_posts parent_p
-    ON parent_p.ID = sales.product_id
-
+    ON parent_p.ID = opl.product_id
 LEFT JOIN wp_posts var_p
-    ON var_p.ID = sales.variation_id
-   AND sales.variation_id > 0
-
+    ON var_p.ID = opl.variation_id
+   AND opl.variation_id > 0
 LEFT JOIN wp_postmeta pm_sku
     ON pm_sku.post_id = CASE
-        WHEN sales.variation_id > 0 THEN sales.variation_id
-        ELSE sales.product_id
+        WHEN opl.variation_id > 0 THEN opl.variation_id
+        ELSE opl.product_id
     END
    AND pm_sku.meta_key = '_sku'
-
+WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+  AND opl.date_created >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+GROUP BY
+    \`Reporting Month\`,
+    opl.product_id,
+    opl.variation_id
 ORDER BY
-    sales.\`${curLabel} N. Revenue\` DESC,
-    sales.\`${prevLabel} N. Revenue\` DESC,
-    sales.\`${yoyLabel} N. Revenue\` DESC;`
+    \`Reporting Month\` DESC,
+    \`N. Revenue\` DESC;`
         },
         {
             title: "5. Payment Gateway Distribution",
             query: `SELECT 
+    DATE_FORMAT(p.post_date, '%Y-%m') AS \`Reporting Month\`,
     COALESCE(pm_pay.meta_value, 'Unknown/Free') AS \`Payment Gateway\`,
-    
-    -- Current Month (${curLabel})
-    COUNT(DISTINCT CASE WHEN p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59' THEN p.ID END) AS \`${curLabel} Orders\`,
-    SUM(CASE WHEN p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`${curLabel} Revenue\`,
-    
-    -- Last Month (${prevLabel})
-    COUNT(DISTINCT CASE WHEN p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59' THEN p.ID END) AS \`${prevLabel} Orders\`,
-    SUM(CASE WHEN p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`${prevLabel} Revenue\`,
-    
-    -- Last Year (${yoyLabel})
-    COUNT(DISTINCT CASE WHEN p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59' THEN p.ID END) AS \`${yoyLabel} Orders\`,
-    SUM(CASE WHEN p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`${yoyLabel} Revenue\`
-
+    COUNT(DISTINCT p.ID) AS \`Orders\`,
+    SUM(pm_total.meta_value) AS \`Revenue\`
 FROM wp_posts p
 JOIN wp_postmeta pm_total ON p.ID = pm_total.post_id AND pm_total.meta_key = '_order_total'
 LEFT JOIN wp_postmeta pm_pay ON p.ID = pm_pay.post_id AND pm_pay.meta_key = '_payment_method_title'
 WHERE p.post_type = 'shop_order'
   AND p.post_status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
-  AND (
-      (p.post_date >= '${curStartStr} 00:00:00' AND p.post_date <= '${curEndStr} 23:59:59') OR
-      (p.post_date >= '${prevStartStr} 00:00:00' AND p.post_date <= '${prevEndStr} 23:59:59') OR
-      (p.post_date >= '${yoyStartStr} 00:00:00' AND p.post_date <= '${yoyEndStr} 23:59:59')
-  )
-GROUP BY \`Payment Gateway\`
-ORDER BY \`${curLabel} Revenue\` DESC;`
+  AND p.post_date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+GROUP BY \`Reporting Month\`, \`Payment Gateway\`
+ORDER BY \`Reporting Month\` DESC, \`Revenue\` DESC;`
         }
     ];
 }
 
 // Initialize the Application
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("App Initialized v1.0.7");
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log("App Initialized v1.1.2");
     initTabs();
     initFileUpload();
     initSqlRepository();
     initGeminiIntegration();
-    // Charts will render after data is uploaded
+    
+    // Initialize Global Date Filter
+    const dateFilter = document.getElementById('globalDateFilter');
+    if (dateFilter) {
+        // Set default to current month
+        const now = new Date();
+        const m = (now.getMonth() + 1).toString().padStart(2, '0');
+        dateFilter.value = `${now.getFullYear()}-${m}`;
+        currentDashboardMonth = dateFilter.value;
+
+        dateFilter.addEventListener('change', (e) => {
+            currentDashboardMonth = e.target.value;
+            console.log("Dashboard month changed to", currentDashboardMonth);
+            updateDashboards();
+        });
+    }
+    
+    // Load from IndexedDB on startup
+    const savedData = await loadAppDataFromDB();
+    if (savedData && (savedData.executive || savedData.customer || savedData.shipping || savedData.product || savedData.payment)) {
+        appData = savedData;
+        console.log("Loaded data from IndexedDB", appData);
+        updateDashboards();
+    }
 });
 
 // Tab Navigation
@@ -417,7 +292,7 @@ function initFileUpload() {
                         } else if (fields.includes('customer_type')) {
                             appData.customer = data;
                             datasetsFound.push('Customer');
-                        } else if (fields.includes('reporting_period') && fields.includes('average_order_value')) {
+                        } else if (fields.includes('Reporting Month') && fields.includes('average_order_value')) {
                             appData.executive = data;
                             datasetsFound.push('Executive');
                         }
@@ -444,29 +319,76 @@ function updateDashboards() {
     if (appData.shipping) updateShippingDashboard();
     if (appData.product) updateProductDashboard();
     if (appData.payment) updatePaymentDashboard();
+    
+    // Save to IndexedDB after rendering
+    saveAppDataToDB();
+}
+
+function getComparisonMonths(targetMonthStr) {
+    if (!targetMonthStr) {
+        const now = new Date();
+        let m = (now.getMonth() + 1).toString().padStart(2, '0');
+        targetMonthStr = `${now.getFullYear()}-${m}`;
+    }
+    let [year, month] = targetMonthStr.split('-').map(Number);
+    
+    let currentStart = new Date(year, month - 1, 1);
+    let lastMonthStart = new Date(year, month - 2, 1);
+    let lastYearStart = new Date(year - 1, month - 1, 1);
+    
+    const formatYm = (d) => {
+        let m = (d.getMonth() + 1).toString().padStart(2, '0');
+        return `${d.getFullYear()}-${m}`;
+    };
+
+    const formatLabel = (d) => {
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return `${monthNames[d.getMonth()]} ${d.getFullYear().toString().substring(2)}`;
+    };
+    
+    return {
+        current: formatYm(currentStart),
+        last: formatYm(lastMonthStart),
+        yoy: formatYm(lastYearStart),
+        curLabel: formatLabel(currentStart),
+        prevLabel: formatLabel(lastMonthStart),
+        yoyLabel: formatLabel(lastYearStart)
+    };
 }
 
 function updateExecutiveDashboard() {
     const data = appData.executive;
     if (!data || data.length === 0) return;
 
-    let current = data.find(d => d.reporting_period && d.reporting_period.includes('1.'));
-    let lastMonth = data.find(d => d.reporting_period && d.reporting_period.includes('2.'));
+    let { current, last } = getComparisonMonths(currentDashboardMonth);
+    let currRow = data.find(d => d['Reporting Month'] === current);
+    let prevRow = data.find(d => d['Reporting Month'] === last);
     
-    if (current) {
-        document.getElementById('kpi-revenue').textContent = 'Â£' + (current.total_revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('kpi-orders').textContent = (current.total_orders || 0).toLocaleString();
-        document.getElementById('kpi-aov').textContent = 'Â£' + (current.average_order_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (currRow) {
+        document.getElementById('kpi-revenue').textContent = '£' + (currRow.total_revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('kpi-orders').textContent = (currRow.total_orders || 0).toLocaleString();
+        document.getElementById('kpi-aov').textContent = '£' + (currRow.average_order_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-        if (lastMonth) {
-            let revTrend = ((current.total_revenue - lastMonth.total_revenue) / lastMonth.total_revenue) * 100;
-            let ordTrend = ((current.total_orders - lastMonth.total_orders) / lastMonth.total_orders) * 100;
-            let aovTrend = ((current.average_order_value - lastMonth.average_order_value) / lastMonth.average_order_value) * 100;
+        if (prevRow) {
+            let revTrend = ((currRow.total_revenue - prevRow.total_revenue) / prevRow.total_revenue) * 100;
+            let ordTrend = ((currRow.total_orders - prevRow.total_orders) / prevRow.total_orders) * 100;
+            let aovTrend = ((currRow.average_order_value - prevRow.average_order_value) / prevRow.average_order_value) * 100;
             
             updateTrendElement('kpi-revenue-trend', revTrend, 'MoM');
             updateTrendElement('kpi-orders-trend', ordTrend, 'MoM');
             updateTrendElement('kpi-aov-trend', aovTrend, 'MoM');
+        } else {
+            updateTrendElement('kpi-revenue-trend', 0, 'MoM');
+            updateTrendElement('kpi-orders-trend', 0, 'MoM');
+            updateTrendElement('kpi-aov-trend', 0, 'MoM');
         }
+    } else {
+        document.getElementById('kpi-revenue').textContent = '--';
+        document.getElementById('kpi-orders').textContent = '--';
+        document.getElementById('kpi-aov').textContent = '--';
+        updateTrendElement('kpi-revenue-trend', 0, 'MoM');
+        updateTrendElement('kpi-orders-trend', 0, 'MoM');
+        updateTrendElement('kpi-aov-trend', 0, 'MoM');
     }
 }
 
@@ -489,7 +411,10 @@ function updateCustomerDashboard() {
     const data = appData.customer;
     if (!data || data.length === 0) return;
 
-    let actualPeriods = [...new Set(data.map(d => d.reporting_period))].sort();
+    let { current, last, yoy, curLabel, prevLabel, yoyLabel } = getComparisonMonths(currentDashboardMonth);
+    
+    let periods = [yoy, last, current];
+    let labels = [yoyLabel, prevLabel, curLabel];
 
     let newRevenue = [];
     let repeatRevenue = [];
@@ -499,9 +424,9 @@ function updateCustomerDashboard() {
     let currentNewOrders = 0;
     let currentRepeatOrders = 0;
 
-    actualPeriods.forEach(p => {
-        let newRow = data.find(d => d.reporting_period === p && d.customer_type === 'New Customer');
-        let repeatRow = data.find(d => d.reporting_period === p && d.customer_type === 'Repeat Customer');
+    periods.forEach(p => {
+        let newRow = data.find(d => d['Reporting Month'] === p && d.customer_type === 'New Customer');
+        let repeatRow = data.find(d => d['Reporting Month'] === p && d.customer_type === 'Repeat Customer');
         
         newRevenue.push(newRow ? newRow.total_revenue : 0);
         repeatRevenue.push(repeatRow ? repeatRow.total_revenue : 0);
@@ -509,7 +434,7 @@ function updateCustomerDashboard() {
         newAov.push(newRow ? newRow.average_order_value : 0);
         repeatAov.push(repeatRow ? repeatRow.average_order_value : 0);
 
-        if (p.includes('1.')) {
+        if (p === current) {
             currentNewOrders = newRow ? newRow.total_orders : 0;
             currentRepeatOrders = repeatRow ? repeatRow.total_orders : 0;
         }
@@ -517,20 +442,21 @@ function updateCustomerDashboard() {
 
     renderDonutChart('repeatNewOrdersChart', ['Repeat', 'New'], [currentRepeatOrders, currentNewOrders], ['#009640', '#FFE600']);
 
-    renderStackedBarChart('customerRevenueChart', actualPeriods.map(p => p.substring(3)), 
+    renderStackedBarChart('customerRevenueChart', labels, 
         [{label: 'Repeat Customer', data: repeatRevenue, backgroundColor: '#009640'}, 
          {label: 'New Customer', data: newRevenue, backgroundColor: '#FFE600'}]);
 
-    renderStackedBarChart('customerAovChart', actualPeriods.map(p => p.substring(3)), 
-        [{label: 'Repeat AOV (Â£)', data: repeatAov, backgroundColor: '#009640'}, 
-         {label: 'New AOV (Â£)', data: newAov, backgroundColor: '#FFE600'}]);
+    renderStackedBarChart('customerAovChart', labels, 
+        [{label: 'Repeat AOV (£)', data: repeatAov, backgroundColor: '#009640'}, 
+         {label: 'New AOV (£)', data: newAov, backgroundColor: '#FFE600'}]);
 }
 
 function updateShippingDashboard() {
     const data = appData.shipping;
     if (!data || data.length === 0) return;
 
-    const currentData = data.filter(d => d.reporting_period && d.reporting_period.includes('1.'));
+    let { current } = getComparisonMonths(currentDashboardMonth);
+    const currentData = data.filter(d => d['Reporting Month'] === current);
     
     let labels = currentData.map(d => d.shipping_method_name || 'Unknown');
     let volume = currentData.map(d => d.total_orders);
@@ -538,21 +464,19 @@ function updateShippingDashboard() {
     let orderRev = currentData.map(d => d.total_order_revenue);
 
     renderBarChart('fulfillmentVolumeChart', labels, volume, 'Orders', '#373737', 'x');
-    renderBarChart('fulfillmentRevenueChart', labels, shippingRev, 'Shipping Revenue (Â£)', '#009640', 'x');
-    renderBarChart('orderRevenueByMethodChart', labels, orderRev, 'Total Order Revenue (Â£)', '#FFE600', 'x');
+    renderBarChart('fulfillmentRevenueChart', labels, shippingRev, 'Shipping Revenue (£)', '#009640', 'x');
+    renderBarChart('orderRevenueByMethodChart', labels, orderRev, 'Total Order Revenue (£)', '#FFE600', 'x');
 }
 
 function updateProductDashboard() {
     const data = appData.product;
     if (!data || data.length === 0) return;
 
-    const keys = Object.keys(data[0]);
-    const curRevKey = keys.find(k => k.includes('N. Revenue') && keys.indexOf(k) < 6); 
-    const lastRevKey = keys.find(k => k.includes('N. Revenue') && keys.indexOf(k) > 5 && keys.indexOf(k) < 9); 
+    let { current, last } = getComparisonMonths(currentDashboardMonth);
+    const currentData = data.filter(d => d['Reporting Month'] === current);
+    const lastData = data.filter(d => d['Reporting Month'] === last);
     
-    if (!curRevKey) return;
-
-    let sorted = [...data].sort((a, b) => (b[curRevKey] || 0) - (a[curRevKey] || 0));
+    let sorted = [...currentData].sort((a, b) => (b['N. Revenue'] || 0) - (a['N. Revenue'] || 0));
     
     let tbody = document.querySelector('#topPerformersTable tbody');
     if (tbody) {
@@ -561,72 +485,63 @@ function updateProductDashboard() {
             let tr = document.createElement('tr');
             tr.innerHTML = `<td>${row.SKU || ''}</td>
                             <td>${row['Product title'] || ''}</td>
-                            <td>${row[keys[2]] || 0}</td>
-                            <td>Â£${(row[curRevKey] || 0).toLocaleString()}</td>`;
+                            <td>${row['Units'] || 0}</td>
+                            <td>£${(row['N. Revenue'] || 0).toLocaleString()}</td>`;
             tbody.appendChild(tr);
         });
     }
 
-    if (lastRevKey) {
-        let movers = [...data].filter(r => r[lastRevKey] > 0).map(r => {
-            return {
-                ...r,
-                growth: ((r[curRevKey] || 0) - r[lastRevKey]) / r[lastRevKey] * 100
-            };
-        }).sort((a, b) => b.growth - a.growth);
+    let movers = sorted.map(currRow => {
+        let prevRow = lastData.find(r => r.SKU === currRow.SKU) || {};
+        let lastRev = prevRow['N. Revenue'] || 0;
+        let growth = lastRev > 0 ? ((currRow['N. Revenue'] - lastRev) / lastRev) * 100 : 0;
+        return {
+            sku: currRow.SKU,
+            title: currRow['Product title'],
+            growth: growth,
+            curRev: currRow['N. Revenue']
+        };
+    }).filter(m => m.growth > 0 && m.curRev > 0).sort((a, b) => b.growth - a.growth);
 
-        let moversTbody = document.querySelector('#moversTable tbody');
-        if (moversTbody) {
-            moversTbody.innerHTML = '';
-            movers.slice(0, 5).forEach(row => {
-                let tr = document.createElement('tr');
-                let growthColor = row.growth > 0 ? '#009640' : '#EF4444';
-                let sign = row.growth > 0 ? '+' : '';
-                tr.innerHTML = `<td>${row.SKU || ''}</td>
-                                <td>${row['Product title'] || ''}</td>
-                                <td style="color:${growthColor}">${sign}${row.growth.toFixed(1)}%</td>`;
-                moversTbody.appendChild(tr);
-            });
-        }
+    let moversTbody = document.querySelector('#moversShakersTable tbody');
+    if (moversTbody) {
+        moversTbody.innerHTML = '';
+        movers.slice(0, 5).forEach(row => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td>${row.sku || ''}</td>
+                            <td>${row.title || ''}</td>
+                            <td style="color: #009640; font-weight: bold;">+${row.growth.toFixed(1)}%</td>`;
+            moversTbody.appendChild(tr);
+        });
     }
-
-    let catRev = {};
-    data.forEach(row => {
-        let cat = row.Category || 'Uncategorized';
-        catRev[cat] = (catRev[cat] || 0) + (row[curRevKey] || 0);
-    });
-
-    let catLabels = Object.keys(catRev).sort((a, b) => catRev[b] - catRev[a]).slice(0, 10);
-    let catData = catLabels.map(l => catRev[l]);
-
-    renderBarChart('categoryComparisonChart', catLabels, catData, 'GMV (Â£)', '#009640', 'y');
 }
 
 function updatePaymentDashboard() {
     const data = appData.payment;
     if (!data || data.length === 0) return;
 
-    const keys = Object.keys(data[0]);
-    const curOrdKey = keys[1];
-    const curRevKey = keys[2];
+    let { current, last } = getComparisonMonths(currentDashboardMonth);
 
-    let labels = data.map(d => d['Payment Gateway']);
-    let volume = data.map(d => d[curOrdKey] || 0);
-    let revenue = data.map(d => d[curRevKey] || 0);
-
-    renderPieChart('paymentVolumeChart', labels, volume);
-    renderPieChart('paymentRevenueChart', labels, revenue);
+    const currentData = data.filter(d => d['Reporting Month'] === current);
+    
+    let labels = currentData.map(d => d['Payment Gateway']);
+    let revenue = currentData.map(d => d['Revenue']);
+    
+    renderPieChart('paymentPieChart', labels, revenue);
 
     let tbody = document.querySelector('#paymentHistoryTable tbody');
     if (tbody) {
         tbody.innerHTML = '';
-        data.forEach(row => {
+        currentData.forEach(row => {
+            let gw = row['Payment Gateway'];
+            let lastRow = data.find(d => d['Reporting Month'] === last && d['Payment Gateway'] === gw) || {};
+            
             let tr = document.createElement('tr');
-            tr.innerHTML = `<td>${row['Payment Gateway']}</td>
-                            <td>${row[keys[1]] || 0}</td>
-                            <td>Â£${(row[keys[2]] || 0).toLocaleString()}</td>
-                            <td>${row[keys[3]] || 0}</td>
-                            <td>Â£${(row[keys[4]] || 0).toLocaleString()}</td>`;
+            tr.innerHTML = `<td>${gw}</td>
+                            <td>${row.Orders || 0}</td>
+                            <td>£${(row.Revenue || 0).toLocaleString()}</td>
+                            <td>${lastRow.Orders || 0}</td>
+                            <td>£${(lastRow.Revenue || 0).toLocaleString()}</td>`;
             tbody.appendChild(tr);
         });
     }
@@ -703,12 +618,10 @@ function renderStackedBarChart(canvasId, labels, datasets) {
 // SQL Repository Implementation
 function initSqlRepository() {
     var container = document.getElementById('sqlScriptsContainer');
-    var monthSelector = document.getElementById('reportMonthSelector');
-    if (!container || !monthSelector) return;
+    if (!container) return;
 
     function renderScripts() {
-        let yearMonth = monthSelector.value || "2026-04";
-        currentSqlScripts = generateSqlScripts(yearMonth);
+        currentSqlScripts = generateSqlScripts();
         
         if (cmInstances.length === 0) {
             container.innerHTML = '';
@@ -756,8 +669,6 @@ function initSqlRepository() {
     }
 
     renderScripts();
-
-    monthSelector.addEventListener('change', renderScripts);
 
     container.addEventListener('click', function(e) {
         if (e.target.classList.contains('copy-btn')) {
@@ -824,4 +735,6 @@ function initGeminiIntegration() {
         });
     });
 }
+
+
 

@@ -21,6 +21,10 @@
             <h1>Briants Monthly Report Dashboard</h1>
         </div>
         <div class="upload-zone" id="fileUploadZone">
+            <div style="margin-right: 20px; display: flex; align-items: center; gap: 0.5rem;">
+                <label for="globalDateFilter" style="font-weight: 600; color: #373737;">Dashboard Month:</label>
+                <input type="month" id="globalDateFilter" style="padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit;">
+            </div>
             <input type="file" id="csvFileInput" accept=".csv" multiple />
             <label for="csvFileInput" class="btn-primary">Upload CSV Data</label>
             <span id="uploadStatus">No files uploaded</span>
@@ -219,13 +223,7 @@
             <section id="tab-sql" class="tab-content">
                 <h2 class="section-title">SQL Developer Hub</h2>
                 <div class="card info-alert" style="border-left: 5px solid var(--accent-yellow); background: #FFFBEB; margin-bottom: 1rem;">
-                    <p><strong>SQL Data Prep Guide:</strong> Use these queries in your SQL editor (e.g., DBeaver) to pull the correct datasets from Magento. Export the results as a CSV file to power the dashboard visualizations.</p>
-                </div>
-                
-                <div class="card" style="margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem;">
-                    <label for="reportMonthSelector" style="font-weight: 600; color: #373737;">Target Reporting Month:</label>
-                    <input type="month" id="reportMonthSelector" value="2026-04" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 1rem;">
-                    <span style="font-size: 0.875rem; color: #64748B;">Queries will auto-update to include Current, Last Month, and YoY ranges.</span>
+                    <p><strong>SQL Data Prep Guide:</strong> Use these queries in your SQL editor (e.g., DBeaver) to pull the correct 24-month rolling datasets from Magento. Export the results as a CSV file to power the dashboard visualizations.</p>
                 </div>
                 <div class="sql-scripts-container" id="sqlScriptsContainer">
                     <!-- Script Blocks injected via JS -->
