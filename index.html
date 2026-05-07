@@ -21,9 +21,15 @@
             <h1>Briants Monthly Report Dashboard</h1>
         </div>
         <div class="upload-zone" id="fileUploadZone">
-            <div style="margin-right: 20px; display: flex; align-items: center; gap: 0.5rem;">
-                <label for="globalDateFilter" style="font-weight: 600; color: #373737;">Dashboard Month:</label>
-                <input type="month" id="globalDateFilter" style="padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit;">
+            <div style="margin-right: 20px; display: flex; align-items: center; gap: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <label for="globalDateFilter" style="font-weight: 600; color: #373737; font-size: 0.9rem;">Dashboard Month:</label>
+                    <input type="month" id="globalDateFilter" style="padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <label for="compareDateFilter" style="font-weight: 600; color: #373737; font-size: 0.9rem;">Compare Against:</label>
+                    <input type="month" id="compareDateFilter" style="padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit;">
+                </div>
             </div>
             <input type="file" id="csvFileInput" accept=".csv" multiple />
             <label for="csvFileInput" class="btn-primary">Upload CSV Data</label>
@@ -140,10 +146,15 @@
             <section id="tab-product" class="tab-content">
                 <h2 class="section-title">Product Performance</h2>
                 
-                <div class="card">
-                    <h3 class="product-category-heading">Fencing vs Garden Machinery (Revenue)</h3>
-                    <div class="chart-container">
-                        <canvas id="categoryComparisonChart"></canvas>
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 class="product-category-heading" style="margin: 0;">Product Sales Trend (24 Months)</h3>
+                        <select id="productTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; min-width: 250px;">
+                            <option value="">Select a product...</option>
+                        </select>
+                    </div>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="productTrendChart"></canvas>
                     </div>
                 </div>
                 
@@ -234,7 +245,7 @@
 
     <!-- Version Number -->
     <div style="position: fixed; bottom: 10px; right: 10px; font-size: 12px; color: #94A3B8; background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 4px; z-index: 1000;">
-        v1.1.1
+        v1.2.0
     </div>
 
     <!-- Scripts -->

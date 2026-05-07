@@ -8,6 +8,7 @@ let appData = {
 };
 
 let currentDashboardMonth = "";
+let currentCompareMonth = "";
 
 let currentSqlScripts = [];
 let cmInstances = [];
@@ -200,7 +201,7 @@ ORDER BY \`Reporting Month\` DESC, \`Revenue\` DESC;`
 
 // Initialize the Application
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log("App Initialized v1.1.2");
+    console.log("App Initialized v1.2.0");
     initTabs();
     initFileUpload();
     initSqlRepository();
@@ -208,16 +209,26 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Initialize Global Date Filter
     const dateFilter = document.getElementById('globalDateFilter');
-    if (dateFilter) {
-        // Set default to current month
+    const compareFilter = document.getElementById('compareDateFilter');
+    if (dateFilter && compareFilter) {
         const now = new Date();
         const m = (now.getMonth() + 1).toString().padStart(2, '0');
         dateFilter.value = `${now.getFullYear()}-${m}`;
         currentDashboardMonth = dateFilter.value;
+        
+        let prevM = now.getMonth();
+        let prevY = now.getFullYear();
+        if (prevM === 0) { prevM = 12; prevY--; }
+        compareFilter.value = `${prevY}-${prevM.toString().padStart(2, '0')}`;
+        currentCompareMonth = compareFilter.value;
 
         dateFilter.addEventListener('change', (e) => {
             currentDashboardMonth = e.target.value;
-            console.log("Dashboard month changed to", currentDashboardMonth);
+            updateDashboards();
+        });
+        
+        compareFilter.addEventListener('change', (e) => {
+            currentCompareMonth = e.target.value;
             updateDashboards();
         });
     }
@@ -276,6 +287,12 @@ function initFileUpload() {
                     header: true,
                     dynamicTyping: true,
                     skipEmptyLines: true,
+                    transform: function(value) {
+                        if (typeof value === 'string') {
+                            return value.replace(/Ã‚/g, '').trim();
+                        }
+                        return value;
+                    },
                     complete: function(results) {
                         const fields = results.meta.fields;
                         const data = results.data;
@@ -333,7 +350,15 @@ function getComparisonMonths(targetMonthStr) {
     let [year, month] = targetMonthStr.split('-').map(Number);
     
     let currentStart = new Date(year, month - 1, 1);
-    let lastMonthStart = new Date(year, month - 2, 1);
+    
+    let lastMonthStart;
+    if (currentCompareMonth) {
+        let [cYear, cMonth] = currentCompareMonth.split('-').map(Number);
+        lastMonthStart = new Date(cYear, cMonth - 1, 1);
+    } else {
+        lastMonthStart = new Date(year, month - 2, 1);
+    }
+    
     let lastYearStart = new Date(year - 1, month - 1, 1);
     
     const formatYm = (d) => {
@@ -514,6 +539,64 @@ function updateProductDashboard() {
             moversTbody.appendChild(tr);
         });
     }
+    
+    // Setup Product Trend Chart
+    let selector = document.getElementById('productTrendSelector');
+    if (selector) {
+        // Extract unique products
+        let uniqueProducts = new Map();
+        data.forEach(d => {
+            if (d.SKU && !uniqueProducts.has(d.SKU)) {
+                uniqueProducts.set(d.SKU, d['Product title']);
+            }
+        });
+        
+        let skus = Array.from(uniqueProducts.keys()).sort();
+        
+        // Preserve current selection if exists
+        let currentSelection = selector.value;
+        
+        selector.innerHTML = '<option value="">Select a product...</option>';
+        skus.forEach(sku => {
+            let opt = document.createElement('option');
+            opt.value = sku;
+            opt.textContent = `[${sku}] ${uniqueProducts.get(sku)}`;
+            selector.appendChild(opt);
+        });
+        
+        if (currentSelection && uniqueProducts.has(currentSelection)) {
+            selector.value = currentSelection;
+        } else if (skus.length > 0 && !selector.value) {
+            selector.value = skus[0]; // default to first product
+        }
+        
+        // Render chart
+        renderProductTrend(selector.value, data);
+        
+        // Update on change
+        selector.onchange = (e) => {
+            renderProductTrend(e.target.value, data);
+        };
+    }
+}
+
+function renderProductTrend(sku, data) {
+    if (!sku) return;
+    
+    // Get all unique reporting months sorted chronologically
+    let allMonths = [...new Set(data.map(d => d['Reporting Month']))].filter(Boolean).sort();
+    
+    let chartData = [];
+    allMonths.forEach(m => {
+        let row = data.find(d => d['Reporting Month'] === m && d.SKU === sku);
+        chartData.push(row ? (row['N. Revenue'] || 0) : 0);
+    });
+    
+    renderLineChart('productTrendChart', allMonths, {
+        label: 'Net Revenue (£)',
+        data: chartData,
+        color: '#009640'
+    });
 }
 
 function updatePaymentDashboard() {
@@ -590,6 +673,39 @@ function renderBarChart(canvasId, labels, data, datasetLabel, color, axis) {
             datasets: [{ label: datasetLabel, data: data, backgroundColor: color }]
         },
         options: { responsive: true, maintainAspectRatio: false, indexAxis: axis || 'x' }
+    });
+}
+
+function renderLineChart(canvasId, labels, dataObj) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    if (window[canvasId] instanceof Chart) window[canvasId].destroy();
+    
+    window[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: dataObj.label,
+                data: dataObj.data,
+                borderColor: dataObj.color || '#009640',
+                backgroundColor: 'rgba(0, 150, 64, 0.1)',
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                pointBackgroundColor: dataObj.color || '#009640'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
     });
 }
 
@@ -735,6 +851,7 @@ function initGeminiIntegration() {
         });
     });
 }
+
 
 
 
