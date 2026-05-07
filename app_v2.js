@@ -1,4 +1,4 @@
-// Global State
+﻿// Global State
 let appData = {
     executive: null,
     customer: null,
@@ -8,14 +8,55 @@ let appData = {
 };
 
 // SQL Queries for Developer Tab
-const sqlScripts = [
-    {
-        title: "1. Master KPI Export (Revenue, Orders, AOV)",
-        query: `SELECT 
+let currentSqlScripts = [];
+let cmInstances = [];
+
+// SQL Queries for Developer Tab
+function generateSqlScripts(yearMonth) {
+    let [year, month] = yearMonth.split('-').map(Number);
+    
+    // Current Month
+    let currentStart = new Date(year, month - 1, 1);
+    let currentEnd = new Date(year, month, 0);
+    
+    // Last Month
+    let lastMonthStart = new Date(year, month - 2, 1);
+    let lastMonthEnd = new Date(year, month - 1, 0);
+    
+    // Last Year
+    let lastYearStart = new Date(year - 1, month - 1, 1);
+    let lastYearEnd = new Date(year - 1, month, 0);
+    
+    // Format to YYYY-MM-DD
+    const formatDate = (d) => {
+        let m = (d.getMonth() + 1).toString().padStart(2, '0');
+        let day = d.getDate().toString().padStart(2, '0');
+        return \\-\-\\;
+    };
+    
+    let curStartStr = formatDate(currentStart);
+    let curEndStr = formatDate(currentEnd);
+    let prevStartStr = formatDate(lastMonthStart);
+    let prevEndStr = formatDate(lastMonthEnd);
+    let yoyStartStr = formatDate(lastYearStart);
+    let yoyEndStr = formatDate(lastYearEnd);
+    
+    // Format labels: "Apr 26"
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const formatLabel = (d) => \\ \\;
+    
+    let curLabel = formatLabel(currentStart);
+    let prevLabel = formatLabel(lastMonthStart);
+    let yoyLabel = formatLabel(lastYearStart);
+
+    return [
+        {
+            title: "1. Master KPI Export (Revenue, Orders, AOV)",
+            query: \SELECT 
     CASE 
-        WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '1. Current Month (Apr 26)'
-        WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2. Last Month (Mar 26)'
-        WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '3. Last Year YoY (Apr 25)'
+        WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '1. Current Month (\)'
+        WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '2. Last Month (\)'
+        WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '3. Last Year YoY (\)'
     END AS reporting_period,
     COUNT(DISTINCT p.ID) AS total_orders,
     SUM(pm.meta_value) AS total_revenue,
@@ -25,16 +66,16 @@ JOIN wp_postmeta pm ON p.ID = pm.post_id AND pm.meta_key = '_order_total'
 WHERE p.post_type = 'shop_order' 
   AND p.post_status IN ('wc-completed', 'wc-processing')
   AND (
-      (p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59') OR
-      (p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59') OR
-      (p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59')
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59') OR
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59') OR
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59')
   )
 GROUP BY reporting_period
-ORDER BY reporting_period;`
-    },
-    {
-        title: "2. Customer Segmentation (Retail/Trade & Repeat Ratio)",
-        query: `WITH FirstOrders AS (
+ORDER BY reporting_period;\
+        },
+        {
+            title: "2. Customer Segmentation (Retail/Trade & Repeat Ratio)",
+            query: \WITH FirstOrders AS (
     -- Step 1: Find the absolute first purchase date for every customer email
     SELECT 
         pm_email.meta_value AS customer_email,
@@ -50,14 +91,14 @@ TargetOrders AS (
     SELECT 
         p.ID AS order_id,
         CASE 
-            WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '1. Current Month (Apr 26)'
-            WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2. Last Month (Mar 26)'
-            WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '3. Last Year YoY (Apr 25)'
+            WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '1. Current Month (\)'
+            WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '2. Last Month (\)'
+            WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '3. Last Year YoY (\)'
         END AS reporting_period,
         CASE 
-            WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '2026-04-01'
-            WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2026-03-01'
-            WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '2025-04-01'
+            WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '\'
+            WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '\'
+            WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '\'
         END AS period_start_date,
         MAX(CASE WHEN pm.meta_key = '_order_total' THEN pm.meta_value END) AS total_amount,
         MAX(CASE WHEN pm.meta_key = '_billing_email' THEN pm.meta_value END) AS customer_email
@@ -66,9 +107,9 @@ TargetOrders AS (
     WHERE p.post_type = 'shop_order' 
       AND p.post_status IN ('wc-completed', 'wc-processing')
       AND (
-          (p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59') OR
-          (p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59') OR
-          (p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59')
+          (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59') OR
+          (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59') OR
+          (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59')
       )
     GROUP BY p.ID, p.post_date
 )
@@ -85,15 +126,15 @@ SELECT
 FROM TargetOrders t
 JOIN FirstOrders f ON t.customer_email = f.customer_email
 GROUP BY t.reporting_period, customer_type
-ORDER BY t.reporting_period, customer_type;`
-    },
-    {
-        title: "3. Fulfillment & Shipping Analysis",
-        query: `SELECT 
+ORDER BY t.reporting_period, customer_type;\
+        },
+        {
+            title: "3. Fulfillment & Shipping Analysis",
+            query: \SELECT 
     CASE 
-        WHEN p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59' THEN '1. Current Month (Apr 26)'
-        WHEN p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59' THEN '2. Last Month (Mar 26)'
-        WHEN p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59' THEN '3. Last Year YoY (Apr 25)'
+        WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '1. Current Month (\)'
+        WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '2. Last Month (\)'
+        WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN '3. Last Year YoY (\)'
     END AS reporting_period,
     woi.order_item_name AS shipping_method_name,
     COUNT(DISTINCT p.ID) AS total_orders,
@@ -104,32 +145,32 @@ JOIN wp_postmeta pm_total ON p.ID = pm_total.post_id AND pm_total.meta_key = '_o
 JOIN wp_woocommerce_order_items woi ON p.ID = woi.order_id AND woi.order_item_type = 'shipping'
 LEFT JOIN wp_woocommerce_order_itemmeta woim_cost ON woi.order_item_id = woim_cost.order_item_id AND woim_cost.meta_key = 'cost'
 WHERE p.post_type = 'shop_order'
-  AND p.post_status IN ('wc-completed', 'wc-processing')
+  AND p.post_status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
   AND (
-      (p.post_date >= '2026-04-01' AND p.post_date <= '2026-04-30 23:59:59') OR
-      (p.post_date >= '2026-03-01' AND p.post_date <= '2026-03-31 23:59:59') OR
-      (p.post_date >= '2025-04-01' AND p.post_date <= '2025-04-30 23:59:59')
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59') OR
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59') OR
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59')
   )
 GROUP BY reporting_period, shipping_method_name
-ORDER BY reporting_period ASC, total_order_revenue DESC;`
-    },
-    {
-        title: "4. Product Category & SKU Performance (Fencing vs Machinery)",
-        query: `SELECT
-    COALESCE(NULLIF(var_p.post_title, ''), parent_p.post_title) AS \`Product title\`,
-    pm_sku.meta_value AS \`SKU\`,
+ORDER BY reporting_period, total_orders DESC;\
+        },
+        {
+            title: "4. Product Performance Deep Dive",
+            query: \SELECT
+    COALESCE(NULLIF(var_p.post_title, ''), parent_p.post_title) AS \\\Product title\\\,
+    pm_sku.meta_value AS \\\SKU\\\,
 
-    sales.\`Apr 26 Units\`,
-    sales.\`Apr 26 N. Revenue\`,
-    sales.\`Apr 26 Orders\`,
+    sales.\\\\ Units\\\,
+    sales.\\\\ N. Revenue\\\,
+    sales.\\\\ Orders\\\,
 
-    sales.\`Mar 26 Units\`,
-    sales.\`Mar 26 N. Revenue\`,
-    sales.\`Mar 26 Orders\`,
+    sales.\\\\ Units\\\,
+    sales.\\\\ N. Revenue\\\,
+    sales.\\\\ Orders\\\,
 
-    sales.\`Apr 25 Units\`,
-    sales.\`Apr 25 N. Revenue\`,
-    sales.\`Apr 25 Orders\`,
+    sales.\\\\ Units\\\,
+    sales.\\\\ N. Revenue\\\,
+    sales.\\\\ Orders\\\,
 
     (
         SELECT GROUP_CONCAT(t.name SEPARATOR ', ')
@@ -140,7 +181,7 @@ ORDER BY reporting_period ASC, total_order_revenue DESC;`
         JOIN wp_terms t
             ON t.term_id = tt.term_id
         WHERE tr.object_id = sales.product_id
-    ) AS \`Category\`
+    ) AS \\\Category\\\
 
 FROM (
     SELECT
@@ -149,83 +190,83 @@ FROM (
 
         SUM(
             CASE
-                WHEN opl.date_created >= '2026-04-01 00:00:00'
-                 AND opl.date_created <= '2026-04-30 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.product_qty
                 ELSE 0
             END
-        ) AS \`Apr 26 Units\`,
+        ) AS \\\\ Units\\\,
 
         SUM(
             CASE
-                WHEN opl.date_created >= '2026-04-01 00:00:00'
-                 AND opl.date_created <= '2026-04-30 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.product_net_revenue
                 ELSE 0
             END
-        ) AS \`Apr 26 N. Revenue\`,
+        ) AS \\\\ N. Revenue\\\,
 
         COUNT(
             DISTINCT CASE
-                WHEN opl.date_created >= '2026-04-01 00:00:00'
-                 AND opl.date_created <= '2026-04-30 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.order_id
             END
-        ) AS \`Apr 26 Orders\`,
+        ) AS \\\\ Orders\\\,
 
 
         SUM(
             CASE
-                WHEN opl.date_created >= '2026-03-01 00:00:00'
-                 AND opl.date_created <= '2026-03-31 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.product_qty
                 ELSE 0
             END
-        ) AS \`Mar 26 Units\`,
+        ) AS \\\\ Units\\\,
 
         SUM(
             CASE
-                WHEN opl.date_created >= '2026-03-01 00:00:00'
-                 AND opl.date_created <= '2026-03-31 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.product_net_revenue
                 ELSE 0
             END
-        ) AS \`Mar 26 N. Revenue\`,
+        ) AS \\\\ N. Revenue\\\,
 
         COUNT(
             DISTINCT CASE
-                WHEN opl.date_created >= '2026-03-01 00:00:00'
-                 AND opl.date_created <= '2026-03-31 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.order_id
             END
-        ) AS \`Mar 26 Orders\`,
+        ) AS \\\\ Orders\\\,
 
 
         SUM(
             CASE
-                WHEN opl.date_created >= '2025-04-01 00:00:00'
-                 AND opl.date_created <= '2025-04-30 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.product_qty
                 ELSE 0
             END
-        ) AS \`Apr 25 Units\`,
+        ) AS \\\\ Units\\\,
 
         SUM(
             CASE
-                WHEN opl.date_created >= '2025-04-01 00:00:00'
-                 AND opl.date_created <= '2025-04-30 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.product_net_revenue
                 ELSE 0
             END
-        ) AS \`Apr 25 N. Revenue\`,
+        ) AS \\\\ N. Revenue\\\,
 
         COUNT(
             DISTINCT CASE
-                WHEN opl.date_created >= '2025-04-01 00:00:00'
-                 AND opl.date_created <= '2025-04-30 23:59:59'
+                WHEN opl.date_created >= '\ 00:00:00'
+                 AND opl.date_created <= '\ 23:59:59'
                 THEN opl.order_id
             END
-        ) AS \`Apr 25 Orders\`
+        ) AS \\\\ Orders\\\
 
     FROM wp_wc_order_product_lookup opl
     JOIN wp_wc_order_stats os
@@ -234,16 +275,16 @@ FROM (
     WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
       AND (
             (
-                opl.date_created >= '2026-04-01 00:00:00'
-                AND opl.date_created <= '2026-04-30 23:59:59'
+                opl.date_created >= '\ 00:00:00'
+                AND opl.date_created <= '\ 23:59:59'
             )
          OR (
-                opl.date_created >= '2026-03-01 00:00:00'
-                AND opl.date_created <= '2026-03-31 23:59:59'
+                opl.date_created >= '\ 00:00:00'
+                AND opl.date_created <= '\ 23:59:59'
             )
          OR (
-                opl.date_created >= '2025-04-01 00:00:00'
-                AND opl.date_created <= '2025-04-30 23:59:59'
+                opl.date_created >= '\ 00:00:00'
+                AND opl.date_created <= '\ 23:59:59'
             )
       )
 
@@ -268,26 +309,26 @@ LEFT JOIN wp_postmeta pm_sku
    AND pm_sku.meta_key = '_sku'
 
 ORDER BY
-    sales.\`Apr 26 N. Revenue\` DESC,
-    sales.\`Mar 26 N. Revenue\` DESC,
-    sales.\`Apr 25 N. Revenue\` DESC;`
-    },
-    {
-        title: "5. Payment Gateway Distribution",
-        query: `SELECT 
-    COALESCE(pm_pay.meta_value, 'Unknown/Free') AS \`Payment Gateway\`,
+    sales.\\\\ N. Revenue\\\ DESC,
+    sales.\\\\ N. Revenue\\\ DESC,
+    sales.\\\\ N. Revenue\\\ DESC;\
+        },
+        {
+            title: "5. Payment Gateway Distribution",
+            query: \SELECT 
+    COALESCE(pm_pay.meta_value, 'Unknown/Free') AS \\\Payment Gateway\\\,
     
-    -- Current Month (Apr 26)
-    COUNT(DISTINCT CASE WHEN p.post_date >= '2026-04-01 00:00:00' AND p.post_date <= '2026-04-30 23:59:59' THEN p.ID END) AS \`Apr 26 Orders\`,
-    SUM(CASE WHEN p.post_date >= '2026-04-01 00:00:00' AND p.post_date <= '2026-04-30 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`Apr 26 Revenue\`,
+    -- Current Month (\)
+    COUNT(DISTINCT CASE WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN p.ID END) AS \\\\ Orders\\\,
+    SUM(CASE WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \\\\ Revenue\\\,
     
-    -- Last Month (Mar 26)
-    COUNT(DISTINCT CASE WHEN p.post_date >= '2026-03-01 00:00:00' AND p.post_date <= '2026-03-31 23:59:59' THEN p.ID END) AS \`Mar 26 Orders\`,
-    SUM(CASE WHEN p.post_date >= '2026-03-01 00:00:00' AND p.post_date <= '2026-03-31 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`Mar 26 Revenue\`,
+    -- Last Month (\)
+    COUNT(DISTINCT CASE WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN p.ID END) AS \\\\ Orders\\\,
+    SUM(CASE WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \\\\ Revenue\\\,
     
-    -- Last Year (Apr 25)
-    COUNT(DISTINCT CASE WHEN p.post_date >= '2025-04-01 00:00:00' AND p.post_date <= '2025-04-30 23:59:59' THEN p.ID END) AS \`Apr 25 Orders\`,
-    SUM(CASE WHEN p.post_date >= '2025-04-01 00:00:00' AND p.post_date <= '2025-04-30 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`Apr 25 Revenue\`
+    -- Last Year (\)
+    COUNT(DISTINCT CASE WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN p.ID END) AS \\\\ Orders\\\,
+    SUM(CASE WHEN p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \\\\ Revenue\\\
 
 FROM wp_posts p
 JOIN wp_postmeta pm_total ON p.ID = pm_total.post_id AND pm_total.meta_key = '_order_total'
@@ -295,14 +336,15 @@ LEFT JOIN wp_postmeta pm_pay ON p.ID = pm_pay.post_id AND pm_pay.meta_key = '_pa
 WHERE p.post_type = 'shop_order'
   AND p.post_status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
   AND (
-      (p.post_date >= '2026-04-01 00:00:00' AND p.post_date <= '2026-04-30 23:59:59') OR
-      (p.post_date >= '2026-03-01 00:00:00' AND p.post_date <= '2026-03-31 23:59:59') OR
-      (p.post_date >= '2025-04-01 00:00:00' AND p.post_date <= '2025-04-30 23:59:59')
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59') OR
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59') OR
+      (p.post_date >= '\ 00:00:00' AND p.post_date <= '\ 23:59:59')
   )
-GROUP BY \`Payment Gateway\`
-ORDER BY \`Apr 26 Revenue\` DESC;`
-    }
-];
+GROUP BY \\\Payment Gateway\\\
+ORDER BY \\\\ Revenue\\\ DESC;\
+        }
+    ];
+}
 
 // Initialize the Application
 document.addEventListener('DOMContentLoaded', function() {
@@ -412,9 +454,9 @@ function updateExecutiveDashboard() {
     let lastMonth = data.find(d => d.reporting_period && d.reporting_period.includes('2.'));
     
     if (current) {
-        document.getElementById('kpi-revenue').textContent = '£' + (current.total_revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('kpi-revenue').textContent = 'Â£' + (current.total_revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('kpi-orders').textContent = (current.total_orders || 0).toLocaleString();
-        document.getElementById('kpi-aov').textContent = '£' + (current.average_order_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('kpi-aov').textContent = 'Â£' + (current.average_order_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         if (lastMonth) {
             let revTrend = ((current.total_revenue - lastMonth.total_revenue) / lastMonth.total_revenue) * 100;
@@ -480,8 +522,8 @@ function updateCustomerDashboard() {
          {label: 'New Customer', data: newRevenue, backgroundColor: '#FFE600'}]);
 
     renderStackedBarChart('customerAovChart', actualPeriods.map(p => p.substring(3)), 
-        [{label: 'Repeat AOV (£)', data: repeatAov, backgroundColor: '#009640'}, 
-         {label: 'New AOV (£)', data: newAov, backgroundColor: '#FFE600'}]);
+        [{label: 'Repeat AOV (Â£)', data: repeatAov, backgroundColor: '#009640'}, 
+         {label: 'New AOV (Â£)', data: newAov, backgroundColor: '#FFE600'}]);
 }
 
 function updateShippingDashboard() {
@@ -496,8 +538,8 @@ function updateShippingDashboard() {
     let orderRev = currentData.map(d => d.total_order_revenue);
 
     renderBarChart('fulfillmentVolumeChart', labels, volume, 'Orders', '#373737', 'x');
-    renderBarChart('fulfillmentRevenueChart', labels, shippingRev, 'Shipping Revenue (£)', '#009640', 'x');
-    renderBarChart('orderRevenueByMethodChart', labels, orderRev, 'Total Order Revenue (£)', '#FFE600', 'x');
+    renderBarChart('fulfillmentRevenueChart', labels, shippingRev, 'Shipping Revenue (Â£)', '#009640', 'x');
+    renderBarChart('orderRevenueByMethodChart', labels, orderRev, 'Total Order Revenue (Â£)', '#FFE600', 'x');
 }
 
 function updateProductDashboard() {
@@ -520,7 +562,7 @@ function updateProductDashboard() {
             tr.innerHTML = `<td>${row.SKU || ''}</td>
                             <td>${row['Product title'] || ''}</td>
                             <td>${row[keys[2]] || 0}</td>
-                            <td>£${(row[curRevKey] || 0).toLocaleString()}</td>`;
+                            <td>Â£${(row[curRevKey] || 0).toLocaleString()}</td>`;
             tbody.appendChild(tr);
         });
     }
@@ -557,7 +599,7 @@ function updateProductDashboard() {
     let catLabels = Object.keys(catRev).sort((a, b) => catRev[b] - catRev[a]).slice(0, 10);
     let catData = catLabels.map(l => catRev[l]);
 
-    renderBarChart('categoryComparisonChart', catLabels, catData, 'GMV (£)', '#009640', 'y');
+    renderBarChart('categoryComparisonChart', catLabels, catData, 'GMV (Â£)', '#009640', 'y');
 }
 
 function updatePaymentDashboard() {
@@ -582,9 +624,9 @@ function updatePaymentDashboard() {
             let tr = document.createElement('tr');
             tr.innerHTML = `<td>${row['Payment Gateway']}</td>
                             <td>${row[keys[1]] || 0}</td>
-                            <td>£${(row[keys[2]] || 0).toLocaleString()}</td>
+                            <td>Â£${(row[keys[2]] || 0).toLocaleString()}</td>
                             <td>${row[keys[3]] || 0}</td>
-                            <td>£${(row[keys[4]] || 0).toLocaleString()}</td>`;
+                            <td>Â£${(row[keys[4]] || 0).toLocaleString()}</td>`;
             tbody.appendChild(tr);
         });
     }
@@ -661,49 +703,66 @@ function renderStackedBarChart(canvasId, labels, datasets) {
 // SQL Repository Implementation
 function initSqlRepository() {
     var container = document.getElementById('sqlScriptsContainer');
-    if (!container) return;
+    var monthSelector = document.getElementById('reportMonthSelector');
+    if (!container || !monthSelector) return;
 
-    container.innerHTML = '';
+    function renderScripts() {
+        let yearMonth = monthSelector.value || "2026-04";
+        currentSqlScripts = generateSqlScripts(yearMonth);
+        
+        if (cmInstances.length === 0) {
+            container.innerHTML = '';
+            currentSqlScripts.forEach(function(script, index) {
+                var block = document.createElement('div');
+                block.className = 'sql-script-block';
 
-    sqlScripts.forEach(function(script, index) {
-        var block = document.createElement('div');
-        block.className = 'sql-script-block';
+                var header = document.createElement('div');
+                header.className = 'sql-header';
 
-        var header = document.createElement('div');
-        header.className = 'sql-header';
+                var title = document.createElement('h3');
+                title.textContent = script.title;
 
-        var title = document.createElement('h3');
-        title.textContent = script.title;
+                var copyBtn = document.createElement('button');
+                copyBtn.className = 'btn-secondary copy-btn';
+                copyBtn.setAttribute('data-index', index);
+                copyBtn.textContent = 'Copy to Clipboard';
 
-        var copyBtn = document.createElement('button');
-        copyBtn.className = 'btn-secondary copy-btn';
-        copyBtn.setAttribute('data-index', index);
-        copyBtn.textContent = 'Copy to Clipboard';
+                header.appendChild(title);
+                header.appendChild(copyBtn);
 
-        header.appendChild(title);
-        header.appendChild(copyBtn);
+                var textarea = document.createElement('textarea');
+                textarea.id = 'sql-editor-' + index;
 
-        var textarea = document.createElement('textarea');
-        textarea.id = 'sql-editor-' + index;
-        textarea.value = script.query;
+                block.appendChild(header);
+                block.appendChild(textarea);
+                container.appendChild(block);
 
-        block.appendChild(header);
-        block.appendChild(textarea);
-        container.appendChild(block);
+                let cm = CodeMirror.fromTextArea(document.getElementById('sql-editor-' + index), {
+                    mode: "text/x-sql",
+                    theme: "dracula",
+                    readOnly: true,
+                    lineNumbers: true,
+                    lineWrapping: true
+                });
+                cm.setValue(script.query);
+                cmInstances.push({ titleEl: title, cm: cm });
+            });
+        } else {
+            currentSqlScripts.forEach(function(script, index) {
+                cmInstances[index].titleEl.textContent = script.title;
+                cmInstances[index].cm.setValue(script.query);
+            });
+        }
+    }
 
-        CodeMirror.fromTextArea(document.getElementById('sql-editor-' + index), {
-            mode: "text/x-sql",
-            theme: "dracula",
-            readOnly: true,
-            lineNumbers: true,
-            lineWrapping: true
-        });
-    });
+    renderScripts();
+
+    monthSelector.addEventListener('change', renderScripts);
 
     container.addEventListener('click', function(e) {
         if (e.target.classList.contains('copy-btn')) {
             var idx = e.target.getAttribute('data-index');
-            navigator.clipboard.writeText(sqlScripts[idx].query).then(function() {
+            navigator.clipboard.writeText(currentSqlScripts[idx].query).then(function() {
                 var originalText = e.target.textContent;
                 e.target.textContent = 'Copied!';
                 e.target.style.backgroundColor = '#009640';
@@ -765,3 +824,4 @@ function initGeminiIntegration() {
         });
     });
 }
+
