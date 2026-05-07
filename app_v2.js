@@ -112,23 +112,162 @@ ORDER BY reporting_period ASC, total_order_revenue DESC;`
     },
     {
         title: "4. Product Category & SKU Performance (Fencing vs Machinery)",
-        query: `-- Product Performance Tab: Identify Movers & Shakers
-SELECT 
-    i.sku,
-    i.name as product_name,
-    parent_cat.name as category,
-    SUM(i.qty_ordered) as units_sold,
-    SUM(i.base_row_total) as gmv,
-    'Requires Month-over-Month Join' as trend
-FROM sales_order_item i
-JOIN sales_order o ON i.order_id = o.entity_id
-JOIN catalog_category_product cp ON i.product_id = cp.product_id
-JOIN catalog_category_entity_varchar parent_cat ON cp.category_id = parent_cat.entity_id
-    AND parent_cat.attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'name')
-WHERE o.created_at >= '2026-04-01'
-AND parent_cat.name IN ('Fencing', 'Garden Machinery', 'Power Tools', 'STIHL')
-GROUP BY 1, 2, 3
-ORDER BY gmv DESC;`
+        query: `SELECT
+    COALESCE(NULLIF(var_p.post_title, ''), parent_p.post_title) AS \`Product title\`,
+    pm_sku.meta_value AS \`SKU\`,
+
+    sales.\`Apr 26 Units\`,
+    sales.\`Apr 26 N. Revenue\`,
+    sales.\`Apr 26 Orders\`,
+
+    sales.\`Mar 26 Units\`,
+    sales.\`Mar 26 N. Revenue\`,
+    sales.\`Mar 26 Orders\`,
+
+    sales.\`Apr 25 Units\`,
+    sales.\`Apr 25 N. Revenue\`,
+    sales.\`Apr 25 Orders\`,
+
+    (
+        SELECT GROUP_CONCAT(t.name SEPARATOR ', ')
+        FROM wp_term_relationships tr
+        JOIN wp_term_taxonomy tt
+            ON tt.term_taxonomy_id = tr.term_taxonomy_id
+           AND tt.taxonomy = 'product_cat'
+        JOIN wp_terms t
+            ON t.term_id = tt.term_id
+        WHERE tr.object_id = sales.product_id
+    ) AS \`Category\`
+
+FROM (
+    SELECT
+        opl.product_id,
+        opl.variation_id,
+
+        SUM(
+            CASE
+                WHEN opl.date_created >= '2026-04-01 00:00:00'
+                 AND opl.date_created <= '2026-04-30 23:59:59'
+                THEN opl.product_qty
+                ELSE 0
+            END
+        ) AS \`Apr 26 Units\`,
+
+        SUM(
+            CASE
+                WHEN opl.date_created >= '2026-04-01 00:00:00'
+                 AND opl.date_created <= '2026-04-30 23:59:59'
+                THEN opl.product_net_revenue
+                ELSE 0
+            END
+        ) AS \`Apr 26 N. Revenue\`,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN opl.date_created >= '2026-04-01 00:00:00'
+                 AND opl.date_created <= '2026-04-30 23:59:59'
+                THEN opl.order_id
+            END
+        ) AS \`Apr 26 Orders\`,
+
+
+        SUM(
+            CASE
+                WHEN opl.date_created >= '2026-03-01 00:00:00'
+                 AND opl.date_created <= '2026-03-31 23:59:59'
+                THEN opl.product_qty
+                ELSE 0
+            END
+        ) AS \`Mar 26 Units\`,
+
+        SUM(
+            CASE
+                WHEN opl.date_created >= '2026-03-01 00:00:00'
+                 AND opl.date_created <= '2026-03-31 23:59:59'
+                THEN opl.product_net_revenue
+                ELSE 0
+            END
+        ) AS \`Mar 26 N. Revenue\`,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN opl.date_created >= '2026-03-01 00:00:00'
+                 AND opl.date_created <= '2026-03-31 23:59:59'
+                THEN opl.order_id
+            END
+        ) AS \`Mar 26 Orders\`,
+
+
+        SUM(
+            CASE
+                WHEN opl.date_created >= '2025-04-01 00:00:00'
+                 AND opl.date_created <= '2025-04-30 23:59:59'
+                THEN opl.product_qty
+                ELSE 0
+            END
+        ) AS \`Apr 25 Units\`,
+
+        SUM(
+            CASE
+                WHEN opl.date_created >= '2025-04-01 00:00:00'
+                 AND opl.date_created <= '2025-04-30 23:59:59'
+                THEN opl.product_net_revenue
+                ELSE 0
+            END
+        ) AS \`Apr 25 N. Revenue\`,
+
+        COUNT(
+            DISTINCT CASE
+                WHEN opl.date_created >= '2025-04-01 00:00:00'
+                 AND opl.date_created <= '2025-04-30 23:59:59'
+                THEN opl.order_id
+            END
+        ) AS \`Apr 25 Orders\`
+
+    FROM wp_wc_order_product_lookup opl
+    JOIN wp_wc_order_stats os
+        ON os.order_id = opl.order_id
+
+    WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+      AND (
+            (
+                opl.date_created >= '2026-04-01 00:00:00'
+                AND opl.date_created <= '2026-04-30 23:59:59'
+            )
+         OR (
+                opl.date_created >= '2026-03-01 00:00:00'
+                AND opl.date_created <= '2026-03-31 23:59:59'
+            )
+         OR (
+                opl.date_created >= '2025-04-01 00:00:00'
+                AND opl.date_created <= '2025-04-30 23:59:59'
+            )
+      )
+
+    GROUP BY
+        opl.product_id,
+        opl.variation_id
+
+) AS sales
+
+LEFT JOIN wp_posts parent_p
+    ON parent_p.ID = sales.product_id
+
+LEFT JOIN wp_posts var_p
+    ON var_p.ID = sales.variation_id
+   AND sales.variation_id > 0
+
+LEFT JOIN wp_postmeta pm_sku
+    ON pm_sku.post_id = CASE
+        WHEN sales.variation_id > 0 THEN sales.variation_id
+        ELSE sales.product_id
+    END
+   AND pm_sku.meta_key = '_sku'
+
+ORDER BY
+    sales.\`Apr 26 N. Revenue\` DESC,
+    sales.\`Mar 26 N. Revenue\` DESC,
+    sales.\`Apr 25 N. Revenue\` DESC;`
     },
     {
         title: "5. Payment Gateway Distribution",
