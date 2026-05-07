@@ -1,7 +1,10 @@
 // Global State
 let appData = {
-    raw: [],
-    processed: null
+    executive: null,
+    customer: null,
+    shipping: null,
+    product: null,
+    payment: null
 };
 
 // SQL Queries for Developer Tab
@@ -308,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initFileUpload();
     initSqlRepository();
     initGeminiIntegration();
-    renderCharts();
+    // Charts will render after data is uploaded
 });
 
 // Tab Navigation
@@ -343,65 +346,248 @@ function initFileUpload() {
     if (!fileInput) return;
 
     fileInput.addEventListener('change', function(e) {
-        var file = e.target.files[0];
-        if (file) {
-            statusText.textContent = "Uploading " + file.name + "...";
+        var files = e.target.files;
+        if (files.length > 0) {
+            statusText.textContent = `Processing ${files.length} file(s)...`;
+            statusText.style.color = '#373737';
+            
+            let filesProcessed = 0;
+            let datasetsFound = [];
 
-            Papa.parse(file, {
-                header: true,
-                dynamicTyping: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    appData.raw = results.data;
-                    statusText.textContent = "Loaded " + results.data.length + " rows successfully.";
-                    statusText.style.color = '#009640';
-                    processData(results.data);
-                    updateDashboards();
-                },
-                error: function(error) {
-                    statusText.textContent = "Error: " + error.message;
-                    statusText.style.color = '#EF4444';
-                }
-            });
+            for (let i = 0; i < files.length; i++) {
+                Papa.parse(files[i], {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        const fields = results.meta.fields;
+                        const data = results.data;
+                        
+                        if (fields.includes('SKU') || fields.includes('Product title')) {
+                            appData.product = data;
+                            datasetsFound.push('Product');
+                        } else if (fields.includes('Payment Gateway')) {
+                            appData.payment = data;
+                            datasetsFound.push('Payment');
+                        } else if (fields.includes('shipping_method_name')) {
+                            appData.shipping = data;
+                            datasetsFound.push('Shipping');
+                        } else if (fields.includes('customer_type')) {
+                            appData.customer = data;
+                            datasetsFound.push('Customer');
+                        } else if (fields.includes('reporting_period') && fields.includes('average_order_value')) {
+                            appData.executive = data;
+                            datasetsFound.push('Executive');
+                        }
+                        
+                        filesProcessed++;
+                        if (filesProcessed === files.length) {
+                            statusText.textContent = `Loaded ${datasetsFound.length} dataset(s): ${datasetsFound.join(', ')}`;
+                            statusText.style.color = '#009640';
+                            updateDashboards();
+                        }
+                    },
+                    error: function(error) {
+                        console.error("Error parsing " + files[i].name + ":", error);
+                    }
+                });
+            }
         }
     });
 }
 
-// Data Processing
-function processData(data) {
-    appData.processed = true;
-}
-
 function updateDashboards() {
-    const kpiOrders = document.getElementById('kpi-orders');
-    const kpiRevenue = document.getElementById('kpi-revenue');
-    const kpiAov = document.getElementById('kpi-aov');
-
-    if (kpiOrders) kpiOrders.textContent = Math.floor(Math.random() * 2000) + 500;
-    if (kpiRevenue) kpiRevenue.textContent = '£' + (Math.floor(Math.random() * 150000) + 50000).toLocaleString();
-    if (kpiAov) kpiAov.textContent = '£' + (Math.floor(Math.random() * 150) + 80);
-
-    renderCharts();
-    fillTables();
+    if (appData.executive) updateExecutiveDashboard();
+    if (appData.customer) updateCustomerDashboard();
+    if (appData.shipping) updateShippingDashboard();
+    if (appData.product) updateProductDashboard();
+    if (appData.payment) updatePaymentDashboard();
 }
 
-function renderCharts() {
-    // Tab 2: Customer Split
-    renderDonutChart('retailTradeChart', ['Retail', 'Trade'], [65, 35], ['#009640', '#FFE600']);
-    renderDonutChart('repeatNewChart', ['Repeat', 'New'], [78, 22], ['#373737', '#94A3B8']);
-    renderBarChart('basketSizeChart', ['Retail', 'Trade'], [92, 245], 'Avg Basket Size (£)', '#009640');
+function updateExecutiveDashboard() {
+    const data = appData.executive;
+    if (!data || data.length === 0) return;
 
-    // Tab 3: Shipping & Delivery
-    renderBarChart('fulfillmentVolumeChart', ['Standard Delivery', 'Click & Collect', 'Machinery'], [500, 320, 180], 'Orders', '#373737', 'y');
-    renderBarChart('fulfillmentRevenueChart', ['Standard Delivery', 'Click & Collect', 'Machinery'], [42000, 21000, 32000], 'Revenue (£)', '#009640', 'y');
-    renderBarChart('specializedDeliveryChart', ['Standard Pallet', 'Machinery Delivery', 'Oversized'], [140, 95, 55], 'Volume', '#FFE600');
+    let current = data.find(d => d.reporting_period && d.reporting_period.includes('1.'));
+    let lastMonth = data.find(d => d.reporting_period && d.reporting_period.includes('2.'));
+    
+    if (current) {
+        document.getElementById('kpi-revenue').textContent = '£' + (current.total_revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('kpi-orders').textContent = (current.total_orders || 0).toLocaleString();
+        document.getElementById('kpi-aov').textContent = '£' + (current.average_order_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-    // Tab 4: Product Performance
-    renderBarChart('categoryComparisonChart', ['Fencing', 'Garden Machinery', 'STIHL Batteries'], [135000, 92000, 45000], 'GMV (£)', '#009640');
+        if (lastMonth) {
+            let revTrend = ((current.total_revenue - lastMonth.total_revenue) / lastMonth.total_revenue) * 100;
+            let ordTrend = ((current.total_orders - lastMonth.total_orders) / lastMonth.total_orders) * 100;
+            let aovTrend = ((current.average_order_value - lastMonth.average_order_value) / lastMonth.average_order_value) * 100;
+            
+            updateTrendElement('kpi-revenue-trend', revTrend, 'MoM');
+            updateTrendElement('kpi-orders-trend', ordTrend, 'MoM');
+            updateTrendElement('kpi-aov-trend', aovTrend, 'MoM');
+        }
+    }
+}
 
-    // Tab 5: Payment Methods
-    renderPieChart('paymentVolumeChart', ['Card (Stripe)', 'PayPal', 'BACS'], [65, 25, 10]);
-    renderPieChart('paymentRevenueChart', ['Card (Stripe)', 'PayPal', 'BACS'], [55, 20, 25]);
+function updateTrendElement(id, value, suffix) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (value > 0) {
+        el.textContent = `+${value.toFixed(1)}% ${suffix}`;
+        el.className = 'kpi-trend trend-up';
+    } else if (value < 0) {
+        el.textContent = `${value.toFixed(1)}% ${suffix}`;
+        el.className = 'kpi-trend trend-down';
+    } else {
+        el.textContent = `0% ${suffix}`;
+        el.className = 'kpi-trend';
+    }
+}
+
+function updateCustomerDashboard() {
+    const data = appData.customer;
+    if (!data || data.length === 0) return;
+
+    let actualPeriods = [...new Set(data.map(d => d.reporting_period))].sort();
+
+    let newRevenue = [];
+    let repeatRevenue = [];
+    let newAov = [];
+    let repeatAov = [];
+    
+    let currentNewOrders = 0;
+    let currentRepeatOrders = 0;
+
+    actualPeriods.forEach(p => {
+        let newRow = data.find(d => d.reporting_period === p && d.customer_type === 'New Customer');
+        let repeatRow = data.find(d => d.reporting_period === p && d.customer_type === 'Repeat Customer');
+        
+        newRevenue.push(newRow ? newRow.total_revenue : 0);
+        repeatRevenue.push(repeatRow ? repeatRow.total_revenue : 0);
+        
+        newAov.push(newRow ? newRow.average_order_value : 0);
+        repeatAov.push(repeatRow ? repeatRow.average_order_value : 0);
+
+        if (p.includes('1.')) {
+            currentNewOrders = newRow ? newRow.total_orders : 0;
+            currentRepeatOrders = repeatRow ? repeatRow.total_orders : 0;
+        }
+    });
+
+    renderDonutChart('repeatNewOrdersChart', ['Repeat', 'New'], [currentRepeatOrders, currentNewOrders], ['#009640', '#FFE600']);
+
+    renderStackedBarChart('customerRevenueChart', actualPeriods.map(p => p.substring(3)), 
+        [{label: 'Repeat Customer', data: repeatRevenue, backgroundColor: '#009640'}, 
+         {label: 'New Customer', data: newRevenue, backgroundColor: '#FFE600'}]);
+
+    renderStackedBarChart('customerAovChart', actualPeriods.map(p => p.substring(3)), 
+        [{label: 'Repeat AOV (£)', data: repeatAov, backgroundColor: '#009640'}, 
+         {label: 'New AOV (£)', data: newAov, backgroundColor: '#FFE600'}]);
+}
+
+function updateShippingDashboard() {
+    const data = appData.shipping;
+    if (!data || data.length === 0) return;
+
+    const currentData = data.filter(d => d.reporting_period && d.reporting_period.includes('1.'));
+    
+    let labels = currentData.map(d => d.shipping_method_name || 'Unknown');
+    let volume = currentData.map(d => d.total_orders);
+    let shippingRev = currentData.map(d => d.total_shipping_revenue);
+    let orderRev = currentData.map(d => d.total_order_revenue);
+
+    renderBarChart('fulfillmentVolumeChart', labels, volume, 'Orders', '#373737', 'x');
+    renderBarChart('fulfillmentRevenueChart', labels, shippingRev, 'Shipping Revenue (£)', '#009640', 'x');
+    renderBarChart('orderRevenueByMethodChart', labels, orderRev, 'Total Order Revenue (£)', '#FFE600', 'x');
+}
+
+function updateProductDashboard() {
+    const data = appData.product;
+    if (!data || data.length === 0) return;
+
+    const keys = Object.keys(data[0]);
+    const curRevKey = keys.find(k => k.includes('N. Revenue') && keys.indexOf(k) < 6); 
+    const lastRevKey = keys.find(k => k.includes('N. Revenue') && keys.indexOf(k) > 5 && keys.indexOf(k) < 9); 
+    
+    if (!curRevKey) return;
+
+    let sorted = [...data].sort((a, b) => (b[curRevKey] || 0) - (a[curRevKey] || 0));
+    
+    let tbody = document.querySelector('#topPerformersTable tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        sorted.slice(0, 5).forEach(row => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td>${row.SKU || ''}</td>
+                            <td>${row['Product title'] || ''}</td>
+                            <td>${row[keys[2]] || 0}</td>
+                            <td>£${(row[curRevKey] || 0).toLocaleString()}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    if (lastRevKey) {
+        let movers = [...data].filter(r => r[lastRevKey] > 0).map(r => {
+            return {
+                ...r,
+                growth: ((r[curRevKey] || 0) - r[lastRevKey]) / r[lastRevKey] * 100
+            };
+        }).sort((a, b) => b.growth - a.growth);
+
+        let moversTbody = document.querySelector('#moversTable tbody');
+        if (moversTbody) {
+            moversTbody.innerHTML = '';
+            movers.slice(0, 5).forEach(row => {
+                let tr = document.createElement('tr');
+                let growthColor = row.growth > 0 ? '#009640' : '#EF4444';
+                let sign = row.growth > 0 ? '+' : '';
+                tr.innerHTML = `<td>${row.SKU || ''}</td>
+                                <td>${row['Product title'] || ''}</td>
+                                <td style="color:${growthColor}">${sign}${row.growth.toFixed(1)}%</td>`;
+                moversTbody.appendChild(tr);
+            });
+        }
+    }
+
+    let catRev = {};
+    data.forEach(row => {
+        let cat = row.Category || 'Uncategorized';
+        catRev[cat] = (catRev[cat] || 0) + (row[curRevKey] || 0);
+    });
+
+    let catLabels = Object.keys(catRev).sort((a, b) => catRev[b] - catRev[a]).slice(0, 10);
+    let catData = catLabels.map(l => catRev[l]);
+
+    renderBarChart('categoryComparisonChart', catLabels, catData, 'GMV (£)', '#009640', 'y');
+}
+
+function updatePaymentDashboard() {
+    const data = appData.payment;
+    if (!data || data.length === 0) return;
+
+    const keys = Object.keys(data[0]);
+    const curOrdKey = keys[1];
+    const curRevKey = keys[2];
+
+    let labels = data.map(d => d['Payment Gateway']);
+    let volume = data.map(d => d[curOrdKey] || 0);
+    let revenue = data.map(d => d[curRevKey] || 0);
+
+    renderPieChart('paymentVolumeChart', labels, volume);
+    renderPieChart('paymentRevenueChart', labels, revenue);
+
+    let tbody = document.querySelector('#paymentHistoryTable tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        data.forEach(row => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td>${row['Payment Gateway']}</td>
+                            <td>${row[keys[1]] || 0}</td>
+                            <td>£${(row[keys[2]] || 0).toLocaleString()}</td>
+                            <td>${row[keys[3]] || 0}</td>
+                            <td>£${(row[keys[4]] || 0).toLocaleString()}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
 }
 
 // Chart Builders
@@ -450,19 +636,26 @@ function renderBarChart(canvasId, labels, data, datasetLabel, color, axis) {
     });
 }
 
-function fillTables() {
-    var topPerformersTbody = document.querySelector('#topPerformersTable tbody');
-    if (topPerformersTbody) {
-        topPerformersTbody.innerHTML = '<tr><td>BR-101</td><td>Closeboard Panel 6x6</td><td>480</td><td>£14,400</td></tr>'
-            + '<tr><td>STIHL-AP300S</td><td>AP 300 S Battery</td><td>125</td><td>£12,375</td></tr>'
-            + '<tr><td>BR-202</td><td>Gravel Board 2.4m</td><td>890</td><td>£7,120</td></tr>';
-    }
-
-    var moversTbody = document.querySelector('#moversTable tbody');
-    if (moversTbody) {
-        moversTbody.innerHTML = '<tr><td>STIHL-MSA120</td><td>MSA 120 C-B Chainsaw</td><td style="color:#009640">+142%</td></tr>'
-            + '<tr><td>BR-POST-10</td><td>Concrete Post 10ft</td><td style="color:#009640">+35%</td></tr>';
-    }
+function renderStackedBarChart(canvasId, labels, datasets) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    if (window[canvasId] instanceof Chart) window[canvasId].destroy();
+    window[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false,
+            scales: {
+                x: { stacked: false },
+                y: { stacked: false }
+            }
+        }
+    });
 }
 
 // SQL Repository Implementation

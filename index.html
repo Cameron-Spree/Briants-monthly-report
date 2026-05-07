@@ -21,9 +21,9 @@
             <h1>Briants Monthly Report Dashboard</h1>
         </div>
         <div class="upload-zone" id="fileUploadZone">
-            <input type="file" id="csvFileInput" accept=".csv" />
+            <input type="file" id="csvFileInput" accept=".csv" multiple />
             <label for="csvFileInput" class="btn-primary">Upload CSV Data</label>
-            <span id="uploadStatus">No file uploaded</span>
+            <span id="uploadStatus">No files uploaded</span>
         </div>
     </header>
 
@@ -51,19 +51,19 @@
                 
                 <div class="kpi-grid">
                     <div class="kpi-card">
-                        <h4>Total Revenue</h4>
+                        <h4>Total Revenue (Current)</h4>
                         <div class="kpi-value" id="kpi-revenue">--</div>
-                        <div class="kpi-trend trend-up" id="kpi-revenue-trend">+12.4% MoM</div>
+                        <div class="kpi-trend" id="kpi-revenue-trend">-- MoM</div>
                     </div>
                     <div class="kpi-card">
-                        <h4>Total Orders</h4>
+                        <h4>Total Orders (Current)</h4>
                         <div class="kpi-value" id="kpi-orders">--</div>
-                        <div class="kpi-trend trend-up" id="kpi-orders-trend">+8.2% MoM</div>
+                        <div class="kpi-trend" id="kpi-orders-trend">-- MoM</div>
                     </div>
                     <div class="kpi-card">
-                        <h4>AOV</h4>
+                        <h4>AOV (Current)</h4>
                         <div class="kpi-value" id="kpi-aov">--</div>
-                        <div class="kpi-trend trend-down" id="kpi-aov-trend">-2.1% MoM</div>
+                        <div class="kpi-trend" id="kpi-aov-trend">-- MoM</div>
                     </div>
                 </div>
 
@@ -84,23 +84,23 @@
                 
                 <div class="dashboard-grid">
                     <div class="chart-card">
-                        <h3>Retail vs Trade (Revenue)</h3>
+                        <h3>New vs Repeat (Current Month Orders)</h3>
                         <div class="chart-container donut-container">
-                            <canvas id="retailTradeChart"></canvas>
+                            <canvas id="repeatNewOrdersChart"></canvas>
                         </div>
                     </div>
                     <div class="chart-card">
-                        <h3>Repeat vs New Customers (Orders)</h3>
+                        <h3>Revenue by Customer Type</h3>
                         <div class="chart-container donut-container">
-                            <canvas id="repeatNewChart"></canvas>
+                            <canvas id="customerRevenueChart"></canvas>
                         </div>
                     </div>
                 </div>
                 
                 <div class="card">
-                    <h3>Average Basket Size</h3>
+                    <h3>Average Order Value (AOV) Trend</h3>
                     <div class="chart-container">
-                        <canvas id="basketSizeChart"></canvas>
+                        <canvas id="customerAovChart"></canvas>
                     </div>
                 </div>
             </section>
@@ -117,7 +117,7 @@
                         </div>
                     </div>
                     <div class="chart-card">
-                        <h3>Fulfillment Methods (Revenue)</h3>
+                        <h3>Shipping Revenue Collected</h3>
                         <div class="chart-container">
                             <canvas id="fulfillmentRevenueChart"></canvas>
                         </div>
@@ -125,9 +125,9 @@
                 </div>
                 
                 <div class="card">
-                    <h3>Specialized Delivery Breakdown</h3>
+                    <h3>Total Order Revenue by Method</h3>
                     <div class="chart-container">
-                        <canvas id="specializedDeliveryChart"></canvas>
+                        <canvas id="orderRevenueByMethodChart"></canvas>
                     </div>
                 </div>
             </section>
@@ -184,16 +184,33 @@
                 
                 <div class="dashboard-grid">
                     <div class="chart-card">
-                        <h3>Transaction Volume Split</h3>
+                        <h3>Transaction Volume (Current Month)</h3>
                         <div class="chart-container donut-container">
                             <canvas id="paymentVolumeChart"></canvas>
                         </div>
                     </div>
                     <div class="chart-card">
-                        <h3>Revenue Split</h3>
+                        <h3>Revenue Split (Current Month)</h3>
                         <div class="chart-container donut-container">
                             <canvas id="paymentRevenueChart"></canvas>
                         </div>
+                    </div>
+                </div>
+                <div class="card" style="margin-top: 1.5rem;">
+                    <h3>Historical Gateway Performance</h3>
+                    <div class="table-container">
+                        <table class="data-table" id="paymentHistoryTable">
+                            <thead>
+                                <tr>
+                                    <th>Gateway</th>
+                                    <th>Current Orders</th>
+                                    <th>Current Revenue</th>
+                                    <th>Last Month Orders</th>
+                                    <th>Last Month Rev</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -213,7 +230,7 @@
 
     <!-- Version Number -->
     <div style="position: fixed; bottom: 10px; right: 10px; font-size: 12px; color: #94A3B8; background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 4px; z-index: 1000;">
-        v1.1.0
+        v1.1.1
     </div>
 
     <!-- Scripts -->
