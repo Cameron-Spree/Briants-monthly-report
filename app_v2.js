@@ -19,10 +19,14 @@ let paymentMonthA = "";
 let paymentMonthB = "";
 let productTableMonthA = "";
 let productTableMonthB = "";
+let categoryTableMonthA = "";
+let categoryTableMonthB = "";
 
-// Product table sort state
+// Table sort state
 let productSortA = { col: 'revenue', dir: 'desc' };
 let productSortB = { col: 'revenue', dir: 'desc' };
+let categorySortA = { col: 'revenue', dir: 'desc' };
+let categorySortB = { col: 'revenue', dir: 'desc' };
 
 let currentSqlScripts = [];
 let cmInstances = [];
@@ -290,6 +294,15 @@ document.addEventListener('DOMContentLoaded', async function() {
         prodA.addEventListener('change', () => { productTableMonthA = prodA.value; updateDashboards(); });
         prodB.addEventListener('change', () => { productTableMonthB = prodB.value; updateDashboards(); });
     }
+    // Category table pickers
+    const catA = document.getElementById('categoryTableMonthA');
+    const catB = document.getElementById('categoryTableMonthB');
+    if (catA && catB) {
+        catA.value = defA; catB.value = defB;
+        categoryTableMonthA = defA; categoryTableMonthB = defB;
+        catA.addEventListener('change', () => { categoryTableMonthA = catA.value; updateDashboards(); });
+        catB.addEventListener('change', () => { categoryTableMonthB = catB.value; updateDashboards(); });
+    }
 
     const savedData = await loadAppDataFromDB();
     if (savedData && (savedData.executive || savedData.customer || savedData.shipping || savedData.product || savedData.payment)) {
@@ -393,7 +406,10 @@ function updateDashboards() {
     if (appData.executive) updateExecutiveDashboard();
     if (appData.customer) updateCustomerDashboard();
     if (appData.shipping) updateShippingDashboard();
-    if (appData.product) updateProductDashboard();
+    if (appData.product) {
+        updateProductDashboard();
+        updateCategoryDashboard();
+    }
     if (appData.payment) updatePaymentDashboard();
     saveAppDataToDB();
 }
@@ -623,6 +639,113 @@ function renderProductTable(tableId, filterId, targetMonth, data, sortState, sid
     if (filterInput) {
         filterInput.oninput = () => renderProductTable(tableId, filterId, targetMonth, data, sortState, side);
     }
+}
+
+function updateCategoryDashboard() {
+    const data = appData.product;
+    if (!data || data.length === 0) return;
+    const months = getMonthsInRange();
+
+    // Category trend chart
+    let selector = document.getElementById('categoryTrendSelector');
+    if (selector) {
+        let uniqueCategories = new Set();
+        data.forEach(d => {
+            if (d.Category) {
+                let cats = d.Category.split(',').map(c => c.trim());
+                if (cats.length > 0) uniqueCategories.add(cats[0]);
+            }
+        });
+        
+        let currentSel = selector.value;
+        selector.innerHTML = '<option value="__ALL__">All Categories (Total Revenue)</option>';
+        Array.from(uniqueCategories).sort().forEach(cat => {
+            let opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            selector.appendChild(opt);
+        });
+        if (currentSel && (currentSel === '__ALL__' || uniqueCategories.has(currentSel))) selector.value = currentSel;
+        
+        renderCategoryTrendChart(selector.value, data, months);
+        selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
+    }
+
+    renderCategoryTable('categoryTableA', categoryTableMonthA, data, categorySortA);
+    renderCategoryTable('categoryTableB', categoryTableMonthB, data, categorySortB);
+}
+
+function renderCategoryTrendChart(category, data, months) {
+    let chartData;
+    if (category === '__ALL__') {
+        chartData = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['N. Revenue'] || 0), 0));
+    } else {
+        chartData = months.map(m => {
+            return data.filter(d => d['Reporting Month'] === m && d.Category && d.Category.split(',').map(c => c.trim())[0] === category)
+                       .reduce((s, d) => s + (d['N. Revenue'] || 0), 0);
+        });
+    }
+    renderLineChart('categoryTrendChart', months.map(formatMonthLabel), { label: 'Net Revenue (\u00A3)', data: chartData, color: '#009640' });
+}
+
+function renderCategoryTable(tableId, targetMonth, data, sortState) {
+    const tbody = document.querySelector('#' + tableId + ' tbody');
+    if (!tbody) return;
+    
+    const prev = getPrevMonth(targetMonth);
+    const yoy = getYoyMonth(targetMonth);
+    
+    const getCategoryStats = (month) => {
+        let stats = {};
+        data.filter(d => d['Reporting Month'] === month).forEach(d => {
+            if (!d.Category) return;
+            let cat = d.Category.split(',').map(c => c.trim())[0];
+            if (!stats[cat]) stats[cat] = { name: cat, units: 0, revenue: 0 };
+            stats[cat].units += (d['Units'] || 0);
+            stats[cat].revenue += (d['N. Revenue'] || 0);
+        });
+        return stats;
+    };
+
+    const curStats = getCategoryStats(targetMonth);
+    const prevStats = getCategoryStats(prev);
+    const yoyStats = getCategoryStats(yoy);
+    
+    let rows = Object.values(curStats).map(r => {
+        let pRev = prevStats[r.name] ? prevStats[r.name].revenue : 0;
+        let yRev = yoyStats[r.name] ? yoyStats[r.name].revenue : 0;
+        return {
+            name: r.name, units: r.units, revenue: r.revenue,
+            prevMom: pRev > 0 ? ((r.revenue - pRev) / pRev) * 100 : 0,
+            yoy: yRev > 0 ? ((r.revenue - yRev) / yRev) * 100 : 0
+        };
+    });
+    
+    // Sort
+    rows.sort((a, b) => {
+        let va = a[sortState.col], vb = b[sortState.col];
+        if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+        return sortState.dir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    });
+    
+    tbody.innerHTML = '';
+    rows.forEach(r => {
+        let tr = document.createElement('tr');
+        let pStyle = r.prevMom > 0 ? 'color:#009640' : r.prevMom < 0 ? 'color:#EF4444' : '';
+        let yStyle = r.yoy > 0 ? 'color:#009640' : r.yoy < 0 ? 'color:#EF4444' : '';
+        tr.innerHTML = '<td>' + r.name + '</td><td>' + r.units + '</td><td>\u00A3' + r.revenue.toLocaleString() + '</td><td style="' + pStyle + '">' + (r.prevMom > 0 ? '+' : '') + r.prevMom.toFixed(1) + '%</td><td style="' + yStyle + '">' + (r.yoy > 0 ? '+' : '') + r.yoy.toFixed(1) + '%</td>';
+        tbody.appendChild(tr);
+    });
+
+    // Sort click handlers
+    document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
+        th.onclick = () => {
+            let col = th.getAttribute('data-sort');
+            if (sortState.col === col) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+            else { sortState.col = col; sortState.dir = 'desc'; }
+            renderCategoryTable(tableId, targetMonth, data, sortState);
+        };
+    });
 }
 
 function updatePaymentDashboard() {

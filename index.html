@@ -44,6 +44,7 @@
                 <button class="tab-btn" data-target="tab-customer">Customer Split</button>
                 <button class="tab-btn" data-target="tab-shipping">Shipping &amp; Delivery</button>
                 <button class="tab-btn" data-target="tab-product">Product Performance</button>
+                <button class="tab-btn" data-target="tab-category">Category Performance</button>
                 <button class="tab-btn" data-target="tab-payment">Payment Methods</button>
                 <button class="tab-btn" data-target="tab-sql">SQL Developer Hub</button>
             </nav>
@@ -247,7 +248,69 @@
                 </div>
             </section>
 
-            <!-- Tab 5: Payment Methods -->
+            <!-- Tab 5: Category Performance -->
+            <section id="tab-category" class="tab-content">
+                <h2 class="section-title">Category Performance</h2>
+                
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 class="product-category-heading" style="margin: 0;">Category Sales Trend</h3>
+                        <select id="categoryTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; min-width: 280px;">
+                            <option value="__ALL__">All Categories (Total Revenue)</option>
+                        </select>
+                    </div>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="categoryTrendChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <!-- Table A -->
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h3 class="product-category-heading" style="margin: 0;">Top Categories</h3>
+                            <input type="month" id="categoryTableMonthA" style="padding: 0.3rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                        </div>
+                        <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+                            <table class="data-table sortable-table" id="categoryTableA">
+                                <thead>
+                                    <tr>
+                                        <th data-sort="name" style="cursor:pointer;">Category &#x25B2;&#x25BC;</th>
+                                        <th data-sort="units" style="cursor:pointer;">Units &#x25B2;&#x25BC;</th>
+                                        <th data-sort="revenue" style="cursor:pointer;">Revenue &#x25B2;&#x25BC;</th>
+                                        <th data-sort="prevMom" style="cursor:pointer;">Prev M % &#x25B2;&#x25BC;</th>
+                                        <th data-sort="yoy" style="cursor:pointer;">YoY % &#x25B2;&#x25BC;</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Table B -->
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h3 class="product-category-heading" style="margin: 0;">Top Categories</h3>
+                            <input type="month" id="categoryTableMonthB" style="padding: 0.3rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                        </div>
+                        <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+                            <table class="data-table sortable-table" id="categoryTableB">
+                                <thead>
+                                    <tr>
+                                        <th data-sort="name" style="cursor:pointer;">Category &#x25B2;&#x25BC;</th>
+                                        <th data-sort="units" style="cursor:pointer;">Units &#x25B2;&#x25BC;</th>
+                                        <th data-sort="revenue" style="cursor:pointer;">Revenue &#x25B2;&#x25BC;</th>
+                                        <th data-sort="prevMom" style="cursor:pointer;">Prev M % &#x25B2;&#x25BC;</th>
+                                        <th data-sort="yoy" style="cursor:pointer;">YoY % &#x25B2;&#x25BC;</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 6: Payment Methods -->
             <section id="tab-payment" class="tab-content">
                 <h2 class="section-title">Payment Methods</h2>
 
