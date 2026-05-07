@@ -504,21 +504,49 @@ function updateProductDashboard() {
 
     // Product trend chart (All Products or single SKU)
     let selector = document.getElementById('productTrendSelector');
-    if (selector) {
+    let searchInput = document.getElementById('productSearch');
+    
+    if (selector && searchInput) {
         let uniqueProducts = new Map();
         data.forEach(d => { if (d.SKU && !uniqueProducts.has(d.SKU)) uniqueProducts.set(d.SKU, d['Product title']); });
-        let currentSel = selector.value;
-        selector.innerHTML = '<option value="__ALL__">All Products (Total Revenue)</option>';
-        Array.from(uniqueProducts.keys()).sort().forEach(sku => {
-            let opt = document.createElement('option');
-            opt.value = sku;
-            opt.textContent = '[' + sku + '] ' + uniqueProducts.get(sku);
-            selector.appendChild(opt);
-        });
-        if (currentSel && (currentSel === '__ALL__' || uniqueProducts.has(currentSel))) selector.value = currentSel;
+        
+        const populateOptions = (filter = "") => {
+            let currentSel = selector.value;
+            selector.innerHTML = '<option value="__ALL__">All Products (Total Revenue)</option>';
+            Array.from(uniqueProducts.keys()).sort().forEach(sku => {
+                let name = uniqueProducts.get(sku);
+                let text = '[' + sku + '] ' + name;
+                if (filter && !text.toLowerCase().includes(filter.toLowerCase())) return;
+                
+                let opt = document.createElement('option');
+                opt.value = sku;
+                opt.textContent = text;
+                selector.appendChild(opt);
+            });
+            if (currentSel && (currentSel === '__ALL__' || uniqueProducts.has(currentSel))) {
+                selector.value = currentSel;
+            }
+        };
+
+        if (!selector.dataset.initialized) {
+            selector.dataset.initialized = "true";
+            populateOptions();
+            
+            searchInput.oninput = () => {
+                populateOptions(searchInput.value);
+            };
+
+            selector.onchange = () => {
+                renderProductTrendChart(selector.value, data, months);
+            };
+        } else {
+            // If already initialized, just make sure we have the latest chart
+            // But don't repopulate the whole list unless search is empty or we really need to
+            // Actually, populateOptions handles preserving the selection, so it's safe to call
+            populateOptions(searchInput.value);
+        }
         
         renderProductTrendChart(selector.value, data, months);
-        selector.onchange = () => renderProductTrendChart(selector.value, data, months);
     }
 
     // Two comparison tables
