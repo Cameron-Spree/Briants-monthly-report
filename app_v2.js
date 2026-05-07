@@ -4,7 +4,8 @@ let appData = {
     customer: null,
     shipping: null,
     product: null,
-    payment: null
+    payment: null,
+    basket: null
 };
 
 let dateRangeFrom = "";
@@ -225,6 +226,26 @@ WHERE p.post_type = 'shop_order'
   AND p.post_date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
 GROUP BY \`Reporting Month\`, \`Payment Gateway\`
 ORDER BY \`Reporting Month\` DESC, \`Revenue\` DESC;`
+        },
+        {
+            title: "6. Market Basket Analysis (Cross-Selling)",
+            query: `SELECT
+    COALESCE(NULLIF(var_p1.post_title, ''), parent_p1.post_title) AS \`Product A\`,
+    COALESCE(NULLIF(var_p2.post_title, ''), parent_p2.post_title) AS \`Product B\`,
+    COUNT(DISTINCT opl1.order_id) AS \`Times Bought Together\`
+FROM wp_wc_order_product_lookup opl1
+JOIN wp_wc_order_product_lookup opl2 ON opl1.order_id = opl2.order_id 
+    AND CASE WHEN opl1.variation_id > 0 THEN opl1.variation_id ELSE opl1.product_id END < CASE WHEN opl2.variation_id > 0 THEN opl2.variation_id ELSE opl2.product_id END
+JOIN wp_wc_order_stats os ON os.order_id = opl1.order_id
+LEFT JOIN wp_posts parent_p1 ON parent_p1.ID = opl1.product_id
+LEFT JOIN wp_posts var_p1 ON var_p1.ID = opl1.variation_id AND opl1.variation_id > 0
+LEFT JOIN wp_posts parent_p2 ON parent_p2.ID = opl2.product_id
+LEFT JOIN wp_posts var_p2 ON var_p2.ID = opl2.variation_id AND opl2.variation_id > 0
+WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+  AND opl1.date_created >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+GROUP BY \`Product A\`, \`Product B\`
+HAVING \`Times Bought Together\` > 2
+ORDER BY \`Times Bought Together\` DESC;`
         }
     ];
 }
@@ -233,7 +254,7 @@ ORDER BY \`Reporting Month\` DESC, \`Revenue\` DESC;`
 
 // Initialize the Application
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log("App Initialized v1.3.0");
+    console.log("App Initialized v1.4.0");
     initTabs();
     initFileUpload();
     initSqlRepository();
@@ -348,6 +369,8 @@ function initFileUpload() {
                         const data = results.data;
                         if (fields.includes('SKU') || fields.includes('Product title')) {
                             appData.product = data; datasetsFound.push('Product');
+                        } else if (fields.includes('Times Bought Together')) {
+                            appData.basket = data; datasetsFound.push('Basket');
                         } else if (fields.includes('Payment Gateway')) {
                             appData.payment = data; datasetsFound.push('Payment');
                         } else if (fields.includes('shipping_method_name')) {
@@ -409,7 +432,9 @@ function updateDashboards() {
     if (appData.product) {
         updateProductDashboard();
         updateCategoryDashboard();
+        updateCategoryBrowser();
     }
+    if (appData.basket) updateBasketDashboard();
     if (appData.payment) updatePaymentDashboard();
     saveAppDataToDB();
 }
@@ -568,6 +593,13 @@ function updateProductDashboard() {
     // Two comparison tables
     renderProductTable('productTableA', 'productFilterA', productTableMonthA, data, productSortA, 'A');
     renderProductTable('productTableB', 'productFilterB', productTableMonthB, data, productSortB, 'B');
+
+    // Rising & Falling Stars
+    const latest = months[months.length - 1];
+    const prev = months.length > 1 ? months[months.length - 2] : null;
+    if (latest && prev) {
+        renderRisingFallingStars('product', latest, prev, data, 'productRisingStars', 'productFallingStars');
+    }
 }
 
 function renderProductTrendChart(sku, data, months) {
@@ -673,6 +705,13 @@ function updateCategoryDashboard() {
 
     renderCategoryTable('categoryTableA', categoryTableMonthA, data, categorySortA);
     renderCategoryTable('categoryTableB', categoryTableMonthB, data, categorySortB);
+
+    // Category Rising & Falling Stars
+    const latest = months[months.length - 1];
+    const prev = months.length > 1 ? months[months.length - 2] : null;
+    if (latest && prev) {
+        renderRisingFallingStars('category', latest, prev, data, 'categoryRisingStars', 'categoryFallingStars');
+    }
 }
 
 function renderCategoryTrendChart(category, data, months) {
@@ -989,3 +1028,168 @@ function initGeminiIntegration() {
 
 
 
+
+function updateCategoryBrowser() {
+    const data = appData.product;
+    if (!data || data.length === 0) return;
+    
+    let select = document.getElementById('categoryBrowserSelect');
+    let title = document.getElementById('categoryBrowserTitle');
+    let tbody = document.querySelector('#categoryBrowserTable tbody');
+    if (!select || !tbody) return;
+
+    let categories = new Set();
+    data.forEach(d => {
+        if (d.Category) {
+            d.Category.split(',').forEach(c => categories.add(c.trim()));
+        }
+    });
+
+    if (select.options.length <= 1) {
+        Array.from(categories).sort().forEach(cat => {
+            let opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            select.appendChild(opt);
+        });
+    }
+
+    const renderBrowserTable = () => {
+        let cat = select.value;
+        if (!cat) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem; color:#94A3B8;">Select a category to see products</td></tr>';
+            return;
+        }
+        title.textContent = 'Products in Category: ' + cat;
+        
+        let seenSkus = new Set();
+        let products = data.filter(d => {
+            if (!d.Category || !d.SKU) return false;
+            let match = d.Category.split(',').map(c => c.trim()).includes(cat);
+            if (match && !seenSkus.has(d.SKU)) {
+                seenSkus.add(d.SKU);
+                return true;
+            }
+            return false;
+        });
+
+        tbody.innerHTML = '';
+        products.forEach(p => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + p.SKU + '</td><td>' + (p['Product title'] || '') + '</td><td style="font-size:0.8rem; color:#64748B;">' + (p.Category || '') + '</td>';
+            tbody.appendChild(tr);
+        });
+    };
+
+    select.onchange = renderBrowserTable;
+    if (!select.dataset.listenerSet) {
+        select.dataset.listenerSet = "true";
+        renderBrowserTable();
+    }
+}
+
+function updateBasketDashboard() {
+    const data = appData.basket;
+    if (!data || data.length === 0) return;
+    
+    const filterInput = document.getElementById('basketFilter');
+    const tbody = document.querySelector('#basketTable tbody');
+    if (!tbody) return;
+
+    const renderTable = () => {
+        let term = filterInput ? filterInput.value.toLowerCase() : "";
+        let filtered = data;
+        if (term) {
+            filtered = data.filter(d => 
+                (String(d['Product A']) || "").toLowerCase().includes(term) || 
+                (String(d['Product B']) || "").toLowerCase().includes(term)
+            );
+        }
+
+        tbody.innerHTML = '';
+        filtered.slice(0, 100).forEach(d => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + d['Product A'] + '</td><td>' + d['Product B'] + '</td><td style="font-weight:600; color:#009640; text-align:center;">' + d['Times Bought Together'] + '</td>';
+            tbody.appendChild(tr);
+        });
+
+        let top10 = filtered.slice(0, 10);
+        renderBarChart('basketTopPairsChart', top10.map(d => String(d['Product A']).substring(0,15) + ' + ' + String(d['Product B']).substring(0,15)), top10.map(d => d['Times Bought Together']), 'Pairings', '#009640', 'y');
+        
+        let bins = { "3-5": 0, "6-10": 0, "11-20": 0, "21+": 0 };
+        filtered.forEach(d => {
+            let v = d['Times Bought Together'];
+            if (v <= 5) bins["3-5"]++;
+            else if (v <= 10) bins["6-10"]++;
+            else if (v <= 20) bins["11-20"]++;
+            else bins["21+"]++;
+        });
+        renderBarChart('basketDistChart', Object.keys(bins), Object.values(bins), 'No. of Pairs', '#373737', 'x');
+    };
+
+    if (filterInput) filterInput.oninput = renderTable;
+    renderTable();
+}
+
+function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, fallingTableId) {
+    const risingTbody = document.querySelector('#' + risingTableId + ' tbody');
+    const fallingTbody = document.querySelector('#' + fallingTableId + ' tbody');
+    if (!risingTbody || !fallingTbody) return;
+
+    let stats = {};
+    
+    if (type === 'product') {
+        data.filter(d => d['Reporting Month'] === month).forEach(d => {
+            if (!d.SKU) return;
+            if (!stats[d.SKU]) stats[d.SKU] = { name: d['Product title'], curRev: 0, prevRev: 0, sku: d.SKU };
+            stats[d.SKU].curRev += (d['N. Revenue'] || 0);
+        });
+        data.filter(d => d['Reporting Month'] === prevMonth).forEach(d => {
+            if (!d.SKU) return;
+            if (!stats[d.SKU]) stats[d.SKU] = { name: d['Product title'], curRev: 0, prevRev: 0, sku: d.SKU };
+            stats[d.SKU].prevRev += (d['N. Revenue'] || 0);
+        });
+    } else {
+        data.filter(d => d['Reporting Month'] === month).forEach(d => {
+            if (!d.Category) return;
+            let cat = d.Category.split(',').map(c => c.trim())[0];
+            if (!stats[cat]) stats[cat] = { name: cat, curRev: 0, prevRev: 0 };
+            stats[cat].curRev += (d['N. Revenue'] || 0);
+        });
+        data.filter(d => d['Reporting Month'] === prevMonth).forEach(d => {
+            if (!d.Category) return;
+            let cat = d.Category.split(',').map(c => c.trim())[0];
+            if (!stats[cat]) stats[cat] = { name: cat, curRev: 0, prevRev: 0 };
+            stats[cat].prevRev += (d['N. Revenue'] || 0);
+        });
+    }
+
+    let items = Object.values(stats).map(i => {
+        i.diff = i.curRev - i.prevRev;
+        return i;
+    });
+
+    let rising = items.filter(i => i.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, 10);
+    risingTbody.innerHTML = '';
+    rising.forEach(i => {
+        let tr = document.createElement('tr');
+        if (type === 'product') {
+            tr.innerHTML = '<td>' + i.sku + '</td><td>' + i.name + '</td><td>\u00A3' + i.prevRev.toLocaleString() + '</td><td>\u00A3' + i.curRev.toLocaleString() + '</td><td style="color:#009640; font-weight:600;">+\u00A3' + i.diff.toLocaleString() + '</td>';
+        } else {
+            tr.innerHTML = '<td>' + i.name + '</td><td>\u00A3' + i.prevRev.toLocaleString() + '</td><td>\u00A3' + i.curRev.toLocaleString() + '</td><td style="color:#009640; font-weight:600;">+\u00A3' + i.diff.toLocaleString() + '</td>';
+        }
+        risingTbody.appendChild(tr);
+    });
+
+    let falling = items.filter(i => i.diff < 0 && i.prevRev >= 500).sort((a, b) => a.diff - b.diff).slice(0, 10);
+    fallingTbody.innerHTML = '';
+    falling.forEach(i => {
+        let tr = document.createElement('tr');
+        if (type === 'product') {
+            tr.innerHTML = '<td>' + i.sku + '</td><td>' + i.name + '</td><td>\u00A3' + i.prevRev.toLocaleString() + '</td><td>\u00A3' + i.curRev.toLocaleString() + '</td><td style="color:#EF4444; font-weight:600;">-\u00A3' + Math.abs(i.diff).toLocaleString() + '</td>';
+        } else {
+            tr.innerHTML = '<td>' + i.name + '</td><td>\u00A3' + i.prevRev.toLocaleString() + '</td><td>\u00A3' + i.curRev.toLocaleString() + '</td><td style="color:#EF4444; font-weight:600;">-\u00A3' + Math.abs(i.diff).toLocaleString() + '</td>';
+        }
+        fallingTbody.appendChild(tr);
+    });
+}
