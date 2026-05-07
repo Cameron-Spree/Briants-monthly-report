@@ -1,4 +1,4 @@
-// Global State
+﻿// Global State
 let appData = {
     executive: null,
     customer: null,
@@ -7,11 +7,37 @@ let appData = {
     payment: null
 };
 
-let currentDashboardMonth = "";
-let currentCompareMonth = "";
+let dateRangeFrom = "";
+let dateRangeTo = "";
+
+// Per-tab comparison month state
+let customerMonthA = "";
+let customerMonthB = "";
+let shippingMonthA = "";
+let shippingMonthB = "";
+let paymentMonthA = "";
+let paymentMonthB = "";
+let productTableMonthA = "";
+let productTableMonthB = "";
+
+// Product table sort state
+let productSortA = { col: 'revenue', dir: 'desc' };
+let productSortB = { col: 'revenue', dir: 'desc' };
 
 let currentSqlScripts = [];
 let cmInstances = [];
+
+// Register ChartJS datalabels plugin
+Chart.register(ChartDataLabels);
+Chart.defaults.set('plugins.datalabels', {
+    display: function(context) {
+        return context.dataset.data[context.dataIndex] > 0;
+    },
+    color: '#373737',
+    font: { size: 10, weight: 600 },
+    anchor: 'end',
+    align: 'top'
+});
 
 // IndexedDB Persistence Wrapper
 const DB_NAME = 'BriantsReportDB';
@@ -199,135 +225,146 @@ ORDER BY \`Reporting Month\` DESC, \`Revenue\` DESC;`
     ];
 }
 
+// ===== LOGIC SECTION (after SQL queries) =====
+
 // Initialize the Application
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log("App Initialized v1.2.0");
+    console.log("App Initialized v1.3.0");
     initTabs();
     initFileUpload();
     initSqlRepository();
     initGeminiIntegration();
     
-    // Initialize Global Date Filter
-    const dateFilter = document.getElementById('globalDateFilter');
-    const compareFilter = document.getElementById('compareDateFilter');
-    if (dateFilter && compareFilter) {
-        const now = new Date();
-        const m = (now.getMonth() + 1).toString().padStart(2, '0');
-        dateFilter.value = `${now.getFullYear()}-${m}`;
-        currentDashboardMonth = dateFilter.value;
-        
-        let prevM = now.getMonth();
-        let prevY = now.getFullYear();
-        if (prevM === 0) { prevM = 12; prevY--; }
-        compareFilter.value = `${prevY}-${prevM.toString().padStart(2, '0')}`;
-        currentCompareMonth = compareFilter.value;
-
-        dateFilter.addEventListener('change', (e) => {
-            currentDashboardMonth = e.target.value;
-            updateDashboards();
-        });
-        
-        compareFilter.addEventListener('change', (e) => {
-            currentCompareMonth = e.target.value;
-            updateDashboards();
-        });
-    }
+    const now = new Date();
+    const fmt = (d) => d.getFullYear() + '-' + (d.getMonth()+1).toString().padStart(2,'0');
+    const sixAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     
-    // Load from IndexedDB on startup
+    const fromEl = document.getElementById('globalDateFrom');
+    const toEl = document.getElementById('globalDateTo');
+    if (fromEl && toEl) {
+        fromEl.value = fmt(sixAgo);
+        toEl.value = fmt(now);
+        dateRangeFrom = fromEl.value;
+        dateRangeTo = toEl.value;
+        fromEl.addEventListener('change', () => { dateRangeFrom = fromEl.value; updateDashboards(); });
+        toEl.addEventListener('change', () => { dateRangeTo = toEl.value; updateDashboards(); });
+    }
+
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const defA = fmt(now);
+    const defB = fmt(prevMonth);
+    
+    function initPicker(idA, idB, key) {
+        const a = document.getElementById(idA);
+        const b = document.getElementById(idB);
+        if (a && b) {
+            a.value = defA; b.value = defB;
+            window[key + 'A'] = defA; window[key + 'B'] = defB;
+            a.addEventListener('change', () => { window[key + 'A'] = a.value; updateDashboards(); });
+            b.addEventListener('change', () => { window[key + 'B'] = b.value; updateDashboards(); });
+        }
+    }
+    initPicker('customerMonthA', 'customerMonthB', 'customerMonth');
+    initPicker('shippingMonthA', 'shippingMonthB', 'shippingMonth');
+    initPicker('paymentMonthA', 'paymentMonthB', 'paymentMonth');
+    initPicker('productTableMonthA', 'productTableMonthB', 'productTableMonth');
+
     const savedData = await loadAppDataFromDB();
     if (savedData && (savedData.executive || savedData.customer || savedData.shipping || savedData.product || savedData.payment)) {
         appData = savedData;
-        console.log("Loaded data from IndexedDB", appData);
         updateDashboards();
     }
 });
 
-// Tab Navigation
 function initTabs() {
     var tabBtns = document.querySelectorAll('.tab-btn');
     var tabContents = document.querySelectorAll('.tab-content');
-
     tabBtns.forEach(function(btn) {
         btn.addEventListener('click', function() {
-            // Remove active from all tabs and content
             tabBtns.forEach(function(b) { b.classList.remove('active'); });
             tabContents.forEach(function(c) { c.classList.remove('active'); });
-
-            // Add active to clicked tab
             btn.classList.add('active');
-
-            // Show the matching content
-            var targetId = btn.getAttribute('data-target');
-            var targetEl = document.getElementById(targetId);
-            if (targetEl) {
-                targetEl.classList.add('active');
-            }
+            var targetEl = document.getElementById(btn.getAttribute('data-target'));
+            if (targetEl) targetEl.classList.add('active');
         });
     });
 }
 
-// File Upload and Parsing
 function initFileUpload() {
     var fileInput = document.getElementById('csvFileInput');
     var statusText = document.getElementById('uploadStatus');
-
     if (!fileInput) return;
-
     fileInput.addEventListener('change', function(e) {
         var files = e.target.files;
         if (files.length > 0) {
-            statusText.textContent = `Processing ${files.length} file(s)...`;
+            statusText.textContent = 'Processing ' + files.length + ' file(s)...';
             statusText.style.color = '#373737';
-            
             let filesProcessed = 0;
             let datasetsFound = [];
-
             for (let i = 0; i < files.length; i++) {
                 Papa.parse(files[i], {
-                    header: true,
-                    dynamicTyping: true,
-                    skipEmptyLines: true,
+                    header: true, dynamicTyping: true, skipEmptyLines: true,
                     transform: function(value) {
-                        if (typeof value === 'string') {
-                            return value.replace(/Ã‚/g, '').trim();
-                        }
+                        if (typeof value === 'string') return value.replace(/\u00C2/g, '').trim();
                         return value;
                     },
                     complete: function(results) {
                         const fields = results.meta.fields;
                         const data = results.data;
-                        
                         if (fields.includes('SKU') || fields.includes('Product title')) {
-                            appData.product = data;
-                            datasetsFound.push('Product');
+                            appData.product = data; datasetsFound.push('Product');
                         } else if (fields.includes('Payment Gateway')) {
-                            appData.payment = data;
-                            datasetsFound.push('Payment');
+                            appData.payment = data; datasetsFound.push('Payment');
                         } else if (fields.includes('shipping_method_name')) {
-                            appData.shipping = data;
-                            datasetsFound.push('Shipping');
+                            appData.shipping = data; datasetsFound.push('Shipping');
                         } else if (fields.includes('customer_type')) {
-                            appData.customer = data;
-                            datasetsFound.push('Customer');
+                            appData.customer = data; datasetsFound.push('Customer');
                         } else if (fields.includes('Reporting Month') && fields.includes('average_order_value')) {
-                            appData.executive = data;
-                            datasetsFound.push('Executive');
+                            appData.executive = data; datasetsFound.push('Executive');
                         }
-                        
                         filesProcessed++;
                         if (filesProcessed === files.length) {
-                            statusText.textContent = `Loaded ${datasetsFound.length} dataset(s): ${datasetsFound.join(', ')}`;
+                            statusText.textContent = 'Loaded ' + datasetsFound.length + ' dataset(s): ' + datasetsFound.join(', ');
                             statusText.style.color = '#009640';
                             updateDashboards();
                         }
-                    },
-                    error: function(error) {
-                        console.error("Error parsing " + files[i].name + ":", error);
                     }
                 });
             }
         }
     });
+}
+
+// ===== UTILITIES =====
+function getMonthsInRange() {
+    if (!dateRangeFrom || !dateRangeTo) return [];
+    let months = [];
+    let [fy, fm] = dateRangeFrom.split('-').map(Number);
+    let [ty, tm] = dateRangeTo.split('-').map(Number);
+    let d = new Date(fy, fm - 1, 1);
+    let end = new Date(ty, tm - 1, 1);
+    while (d <= end) {
+        months.push(d.getFullYear() + '-' + (d.getMonth()+1).toString().padStart(2,'0'));
+        d.setMonth(d.getMonth() + 1);
+    }
+    return months;
+}
+
+function formatMonthLabel(ym) {
+    const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    let [y, m] = ym.split('-').map(Number);
+    return names[m-1] + ' ' + y.toString().substring(2);
+}
+
+function getPrevMonth(ym) {
+    let [y, m] = ym.split('-').map(Number);
+    let d = new Date(y, m - 2, 1);
+    return d.getFullYear() + '-' + (d.getMonth()+1).toString().padStart(2,'0');
+}
+
+function getYoyMonth(ym) {
+    let [y, m] = ym.split('-').map(Number);
+    return (y-1) + '-' + m.toString().padStart(2,'0');
 }
 
 function updateDashboards() {
@@ -336,342 +373,274 @@ function updateDashboards() {
     if (appData.shipping) updateShippingDashboard();
     if (appData.product) updateProductDashboard();
     if (appData.payment) updatePaymentDashboard();
-    
-    // Save to IndexedDB after rendering
     saveAppDataToDB();
-}
-
-function getComparisonMonths(targetMonthStr) {
-    if (!targetMonthStr) {
-        const now = new Date();
-        let m = (now.getMonth() + 1).toString().padStart(2, '0');
-        targetMonthStr = `${now.getFullYear()}-${m}`;
-    }
-    let [year, month] = targetMonthStr.split('-').map(Number);
-    
-    let currentStart = new Date(year, month - 1, 1);
-    
-    let lastMonthStart;
-    if (currentCompareMonth) {
-        let [cYear, cMonth] = currentCompareMonth.split('-').map(Number);
-        lastMonthStart = new Date(cYear, cMonth - 1, 1);
-    } else {
-        lastMonthStart = new Date(year, month - 2, 1);
-    }
-    
-    let lastYearStart = new Date(year - 1, month - 1, 1);
-    
-    const formatYm = (d) => {
-        let m = (d.getMonth() + 1).toString().padStart(2, '0');
-        return `${d.getFullYear()}-${m}`;
-    };
-
-    const formatLabel = (d) => {
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        return `${monthNames[d.getMonth()]} ${d.getFullYear().toString().substring(2)}`;
-    };
-    
-    return {
-        current: formatYm(currentStart),
-        last: formatYm(lastMonthStart),
-        yoy: formatYm(lastYearStart),
-        curLabel: formatLabel(currentStart),
-        prevLabel: formatLabel(lastMonthStart),
-        yoyLabel: formatLabel(lastYearStart)
-    };
-}
-
-function updateExecutiveDashboard() {
-    const data = appData.executive;
-    if (!data || data.length === 0) return;
-
-    let { current, last } = getComparisonMonths(currentDashboardMonth);
-    let currRow = data.find(d => d['Reporting Month'] === current);
-    let prevRow = data.find(d => d['Reporting Month'] === last);
-    
-    if (currRow) {
-        document.getElementById('kpi-revenue').textContent = '£' + (currRow.total_revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('kpi-orders').textContent = (currRow.total_orders || 0).toLocaleString();
-        document.getElementById('kpi-aov').textContent = '£' + (currRow.average_order_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-        if (prevRow) {
-            let revTrend = ((currRow.total_revenue - prevRow.total_revenue) / prevRow.total_revenue) * 100;
-            let ordTrend = ((currRow.total_orders - prevRow.total_orders) / prevRow.total_orders) * 100;
-            let aovTrend = ((currRow.average_order_value - prevRow.average_order_value) / prevRow.average_order_value) * 100;
-            
-            updateTrendElement('kpi-revenue-trend', revTrend, 'MoM');
-            updateTrendElement('kpi-orders-trend', ordTrend, 'MoM');
-            updateTrendElement('kpi-aov-trend', aovTrend, 'MoM');
-        } else {
-            updateTrendElement('kpi-revenue-trend', 0, 'MoM');
-            updateTrendElement('kpi-orders-trend', 0, 'MoM');
-            updateTrendElement('kpi-aov-trend', 0, 'MoM');
-        }
-    } else {
-        document.getElementById('kpi-revenue').textContent = '--';
-        document.getElementById('kpi-orders').textContent = '--';
-        document.getElementById('kpi-aov').textContent = '--';
-        updateTrendElement('kpi-revenue-trend', 0, 'MoM');
-        updateTrendElement('kpi-orders-trend', 0, 'MoM');
-        updateTrendElement('kpi-aov-trend', 0, 'MoM');
-    }
 }
 
 function updateTrendElement(id, value, suffix) {
     const el = document.getElementById(id);
     if (!el) return;
     if (value > 0) {
-        el.textContent = `+${value.toFixed(1)}% ${suffix}`;
+        el.textContent = '+' + value.toFixed(1) + '% ' + suffix;
         el.className = 'kpi-trend trend-up';
     } else if (value < 0) {
-        el.textContent = `${value.toFixed(1)}% ${suffix}`;
+        el.textContent = value.toFixed(1) + '% ' + suffix;
         el.className = 'kpi-trend trend-down';
     } else {
-        el.textContent = `0% ${suffix}`;
+        el.textContent = '0% ' + suffix;
         el.className = 'kpi-trend';
     }
+}
+
+// ===== DASHBOARD UPDATES =====
+
+function updateExecutiveDashboard() {
+    const data = appData.executive;
+    if (!data || data.length === 0) return;
+    const months = getMonthsInRange();
+    const latest = months[months.length - 1];
+    const prev = months.length > 1 ? months[months.length - 2] : null;
+    
+    let currRow = data.find(d => d['Reporting Month'] === latest);
+    let prevRow = prev ? data.find(d => d['Reporting Month'] === prev) : null;
+    
+    if (currRow) {
+        document.getElementById('kpi-revenue').textContent = '\u00A3' + (currRow.total_revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('kpi-orders').textContent = (currRow.total_orders || 0).toLocaleString();
+        document.getElementById('kpi-aov').textContent = '\u00A3' + (currRow.average_order_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (prevRow) {
+            updateTrendElement('kpi-revenue-trend', ((currRow.total_revenue - prevRow.total_revenue) / prevRow.total_revenue) * 100, 'MoM');
+            updateTrendElement('kpi-orders-trend', ((currRow.total_orders - prevRow.total_orders) / prevRow.total_orders) * 100, 'MoM');
+            updateTrendElement('kpi-aov-trend', ((currRow.average_order_value - prevRow.average_order_value) / prevRow.average_order_value) * 100, 'MoM');
+        }
+    }
+    
+    // Executive trend chart over range
+    let revData = months.map(m => { let r = data.find(d => d['Reporting Month'] === m); return r ? r.total_revenue : 0; });
+    let ordData = months.map(m => { let r = data.find(d => d['Reporting Month'] === m); return r ? r.total_orders : 0; });
+    renderMultiLineChart('executiveTrendChart', months.map(formatMonthLabel), [
+        { label: 'Revenue (\u00A3)', data: revData, color: '#009640', yAxisID: 'y' },
+        { label: 'Orders', data: ordData, color: '#FFE600', yAxisID: 'y1' }
+    ]);
 }
 
 function updateCustomerDashboard() {
     const data = appData.customer;
     if (!data || data.length === 0) return;
-
-    let { current, last, yoy, curLabel, prevLabel, yoyLabel } = getComparisonMonths(currentDashboardMonth);
+    const mA = customerMonthA;
+    const mB = customerMonthB;
     
-    let periods = [yoy, last, current];
-    let labels = [yoyLabel, prevLabel, curLabel];
-
-    let newRevenue = [];
-    let repeatRevenue = [];
-    let newAov = [];
-    let repeatAov = [];
+    // Donut for month A
+    let newA = data.find(d => d['Reporting Month'] === mA && d.customer_type === 'New Customer');
+    let repA = data.find(d => d['Reporting Month'] === mA && d.customer_type === 'Repeat Customer');
+    renderDonutChart('repeatNewOrdersChart', ['Repeat (' + formatMonthLabel(mA) + ')', 'New'], [repA ? repA.total_orders : 0, newA ? newA.total_orders : 0], ['#009640', '#FFE600']);
     
-    let currentNewOrders = 0;
-    let currentRepeatOrders = 0;
+    // Revenue comparison bar
+    let newB = data.find(d => d['Reporting Month'] === mB && d.customer_type === 'New Customer');
+    let repB = data.find(d => d['Reporting Month'] === mB && d.customer_type === 'Repeat Customer');
+    renderStackedBarChart('customerRevenueChart', [formatMonthLabel(mA), formatMonthLabel(mB)],
+        [{label: 'Repeat', data: [repA ? repA.total_revenue : 0, repB ? repB.total_revenue : 0], backgroundColor: '#009640'},
+         {label: 'New', data: [newA ? newA.total_revenue : 0, newB ? newB.total_revenue : 0], backgroundColor: '#FFE600'}]);
 
-    periods.forEach(p => {
-        let newRow = data.find(d => d['Reporting Month'] === p && d.customer_type === 'New Customer');
-        let repeatRow = data.find(d => d['Reporting Month'] === p && d.customer_type === 'Repeat Customer');
-        
-        newRevenue.push(newRow ? newRow.total_revenue : 0);
-        repeatRevenue.push(repeatRow ? repeatRow.total_revenue : 0);
-        
-        newAov.push(newRow ? newRow.average_order_value : 0);
-        repeatAov.push(repeatRow ? repeatRow.average_order_value : 0);
+    // AOV comparison
+    renderStackedBarChart('customerAovChart', [formatMonthLabel(mA), formatMonthLabel(mB)],
+        [{label: 'Repeat AOV', data: [repA ? repA.average_order_value : 0, repB ? repB.average_order_value : 0], backgroundColor: '#009640'},
+         {label: 'New AOV', data: [newA ? newA.average_order_value : 0, newB ? newB.average_order_value : 0], backgroundColor: '#FFE600'}]);
 
-        if (p === current) {
-            currentNewOrders = newRow ? newRow.total_orders : 0;
-            currentRepeatOrders = repeatRow ? repeatRow.total_orders : 0;
-        }
-    });
-
-    renderDonutChart('repeatNewOrdersChart', ['Repeat', 'New'], [currentRepeatOrders, currentNewOrders], ['#009640', '#FFE600']);
-
-    renderStackedBarChart('customerRevenueChart', labels, 
-        [{label: 'Repeat Customer', data: repeatRevenue, backgroundColor: '#009640'}, 
-         {label: 'New Customer', data: newRevenue, backgroundColor: '#FFE600'}]);
-
-    renderStackedBarChart('customerAovChart', labels, 
-        [{label: 'Repeat AOV (£)', data: repeatAov, backgroundColor: '#009640'}, 
-         {label: 'New AOV (£)', data: newAov, backgroundColor: '#FFE600'}]);
+    // Trend line over date range
+    const months = getMonthsInRange();
+    let newRev = months.map(m => { let r = data.find(d => d['Reporting Month'] === m && d.customer_type === 'New Customer'); return r ? r.total_revenue : 0; });
+    let repRev = months.map(m => { let r = data.find(d => d['Reporting Month'] === m && d.customer_type === 'Repeat Customer'); return r ? r.total_revenue : 0; });
+    renderMultiLineChart('customerTrendChart', months.map(formatMonthLabel), [
+        { label: 'Repeat Revenue', data: repRev, color: '#009640' },
+        { label: 'New Revenue', data: newRev, color: '#FFE600' }
+    ]);
 }
 
 function updateShippingDashboard() {
     const data = appData.shipping;
     if (!data || data.length === 0) return;
-
-    let { current } = getComparisonMonths(currentDashboardMonth);
-    const currentData = data.filter(d => d['Reporting Month'] === current);
+    const mA = shippingMonthA;
     
-    let labels = currentData.map(d => d.shipping_method_name || 'Unknown');
-    let volume = currentData.map(d => d.total_orders);
-    let shippingRev = currentData.map(d => d.total_shipping_revenue);
-    let orderRev = currentData.map(d => d.total_order_revenue);
+    const curData = data.filter(d => d['Reporting Month'] === mA);
+    let labels = curData.map(d => d.shipping_method_name || 'Unknown');
+    renderBarChart('fulfillmentVolumeChart', labels, curData.map(d => d.total_orders), 'Orders', '#373737', 'x');
+    renderBarChart('fulfillmentRevenueChart', labels, curData.map(d => d.total_shipping_revenue), 'Shipping Rev', '#009640', 'x');
+    renderBarChart('orderRevenueByMethodChart', labels, curData.map(d => d.total_order_revenue), 'Order Rev', '#FFE600', 'x');
 
-    renderBarChart('fulfillmentVolumeChart', labels, volume, 'Orders', '#373737', 'x');
-    renderBarChart('fulfillmentRevenueChart', labels, shippingRev, 'Shipping Revenue (£)', '#009640', 'x');
-    renderBarChart('orderRevenueByMethodChart', labels, orderRev, 'Total Order Revenue (£)', '#FFE600', 'x');
+    // Trend over range
+    const months = getMonthsInRange();
+    let totalOrders = months.map(m => {
+        return data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d.total_orders || 0), 0);
+    });
+    renderLineChart('shippingTrendChart', months.map(formatMonthLabel), { label: 'Total Orders', data: totalOrders, color: '#373737' });
 }
 
 function updateProductDashboard() {
     const data = appData.product;
     if (!data || data.length === 0) return;
+    const months = getMonthsInRange();
 
-    let { current, last } = getComparisonMonths(currentDashboardMonth);
-    const currentData = data.filter(d => d['Reporting Month'] === current);
-    const lastData = data.filter(d => d['Reporting Month'] === last);
-    
-    let sorted = [...currentData].sort((a, b) => (b['N. Revenue'] || 0) - (a['N. Revenue'] || 0));
-    
-    let tbody = document.querySelector('#topPerformersTable tbody');
-    if (tbody) {
-        tbody.innerHTML = '';
-        sorted.slice(0, 5).forEach(row => {
-            let tr = document.createElement('tr');
-            tr.innerHTML = `<td>${row.SKU || ''}</td>
-                            <td>${row['Product title'] || ''}</td>
-                            <td>${row['Units'] || 0}</td>
-                            <td>£${(row['N. Revenue'] || 0).toLocaleString()}</td>`;
-            tbody.appendChild(tr);
-        });
-    }
-
-    let movers = sorted.map(currRow => {
-        let prevRow = lastData.find(r => r.SKU === currRow.SKU) || {};
-        let lastRev = prevRow['N. Revenue'] || 0;
-        let growth = lastRev > 0 ? ((currRow['N. Revenue'] - lastRev) / lastRev) * 100 : 0;
-        return {
-            sku: currRow.SKU,
-            title: currRow['Product title'],
-            growth: growth,
-            curRev: currRow['N. Revenue']
-        };
-    }).filter(m => m.growth > 0 && m.curRev > 0).sort((a, b) => b.growth - a.growth);
-
-    let moversTbody = document.querySelector('#moversShakersTable tbody');
-    if (moversTbody) {
-        moversTbody.innerHTML = '';
-        movers.slice(0, 5).forEach(row => {
-            let tr = document.createElement('tr');
-            tr.innerHTML = `<td>${row.sku || ''}</td>
-                            <td>${row.title || ''}</td>
-                            <td style="color: #009640; font-weight: bold;">+${row.growth.toFixed(1)}%</td>`;
-            moversTbody.appendChild(tr);
-        });
-    }
-    
-    // Setup Product Trend Chart
+    // Product trend chart (All Products or single SKU)
     let selector = document.getElementById('productTrendSelector');
     if (selector) {
-        // Extract unique products
         let uniqueProducts = new Map();
-        data.forEach(d => {
-            if (d.SKU && !uniqueProducts.has(d.SKU)) {
-                uniqueProducts.set(d.SKU, d['Product title']);
-            }
-        });
-        
-        let skus = Array.from(uniqueProducts.keys()).sort();
-        
-        // Preserve current selection if exists
-        let currentSelection = selector.value;
-        
-        selector.innerHTML = '<option value="">Select a product...</option>';
-        skus.forEach(sku => {
+        data.forEach(d => { if (d.SKU && !uniqueProducts.has(d.SKU)) uniqueProducts.set(d.SKU, d['Product title']); });
+        let currentSel = selector.value;
+        selector.innerHTML = '<option value="__ALL__">All Products (Total Revenue)</option>';
+        Array.from(uniqueProducts.keys()).sort().forEach(sku => {
             let opt = document.createElement('option');
             opt.value = sku;
-            opt.textContent = `[${sku}] ${uniqueProducts.get(sku)}`;
+            opt.textContent = '[' + sku + '] ' + uniqueProducts.get(sku);
             selector.appendChild(opt);
         });
+        if (currentSel && (currentSel === '__ALL__' || uniqueProducts.has(currentSel))) selector.value = currentSel;
         
-        if (currentSelection && uniqueProducts.has(currentSelection)) {
-            selector.value = currentSelection;
-        } else if (skus.length > 0 && !selector.value) {
-            selector.value = skus[0]; // default to first product
-        }
-        
-        // Render chart
-        renderProductTrend(selector.value, data);
-        
-        // Update on change
-        selector.onchange = (e) => {
-            renderProductTrend(e.target.value, data);
-        };
+        renderProductTrendChart(selector.value, data, months);
+        selector.onchange = () => renderProductTrendChart(selector.value, data, months);
     }
+
+    // Two comparison tables
+    renderProductTable('productTableA', 'productFilterA', productTableMonthA, data, productSortA, 'A');
+    renderProductTable('productTableB', 'productFilterB', productTableMonthB, data, productSortB, 'B');
 }
 
-function renderProductTrend(sku, data) {
-    if (!sku) return;
+function renderProductTrendChart(sku, data, months) {
+    let chartData;
+    if (sku === '__ALL__') {
+        chartData = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['N. Revenue'] || 0), 0));
+    } else {
+        chartData = months.map(m => { let r = data.find(d => d['Reporting Month'] === m && d.SKU === sku); return r ? (r['N. Revenue'] || 0) : 0; });
+    }
+    renderLineChart('productTrendChart', months.map(formatMonthLabel), { label: 'Net Revenue (\u00A3)', data: chartData, color: '#009640' });
+}
+
+function renderProductTable(tableId, filterId, targetMonth, data, sortState, side) {
+    const tbody = document.querySelector('#' + tableId + ' tbody');
+    const filterInput = document.getElementById(filterId);
+    if (!tbody) return;
     
-    // Get all unique reporting months sorted chronologically
-    let allMonths = [...new Set(data.map(d => d['Reporting Month']))].filter(Boolean).sort();
+    const prev = getPrevMonth(targetMonth);
+    const yoy = getYoyMonth(targetMonth);
+    const curData = data.filter(d => d['Reporting Month'] === targetMonth);
+    const prevData = data.filter(d => d['Reporting Month'] === prev);
+    const yoyData = data.filter(d => d['Reporting Month'] === yoy);
     
-    let chartData = [];
-    allMonths.forEach(m => {
-        let row = data.find(d => d['Reporting Month'] === m && d.SKU === sku);
-        chartData.push(row ? (row['N. Revenue'] || 0) : 0);
+    let rows = curData.map(r => {
+        let pRow = prevData.find(p => p.SKU === r.SKU) || {};
+        let yRow = yoyData.find(y => y.SKU === r.SKU) || {};
+        let pRev = pRow['N. Revenue'] || 0;
+        let yRev = yRow['N. Revenue'] || 0;
+        let curRev = r['N. Revenue'] || 0;
+        return {
+            sku: r.SKU || '', name: r['Product title'] || '',
+            units: r['Units'] || 0, revenue: curRev,
+            prevMom: pRev > 0 ? ((curRev - pRev) / pRev) * 100 : 0,
+            yoy: yRev > 0 ? ((curRev - yRev) / yRev) * 100 : 0
+        };
     });
     
-    renderLineChart('productTrendChart', allMonths, {
-        label: 'Net Revenue (£)',
-        data: chartData,
-        color: '#009640'
+    // Filter
+    let filterText = filterInput ? filterInput.value.toLowerCase() : '';
+    if (filterText) rows = rows.filter(r => r.sku.toLowerCase().includes(filterText) || r.name.toLowerCase().includes(filterText));
+    
+    // Sort
+    rows.sort((a, b) => {
+        let va = a[sortState.col], vb = b[sortState.col];
+        if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+        return sortState.dir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
     });
+    
+    tbody.innerHTML = '';
+    rows.slice(0, 50).forEach(r => {
+        let tr = document.createElement('tr');
+        let pStyle = r.prevMom > 0 ? 'color:#009640' : r.prevMom < 0 ? 'color:#EF4444' : '';
+        let yStyle = r.yoy > 0 ? 'color:#009640' : r.yoy < 0 ? 'color:#EF4444' : '';
+        tr.innerHTML = '<td>' + r.sku + '</td><td>' + r.name + '</td><td>' + r.units + '</td><td>\u00A3' + r.revenue.toLocaleString() + '</td><td style="' + pStyle + '">' + (r.prevMom > 0 ? '+' : '') + r.prevMom.toFixed(1) + '%</td><td style="' + yStyle + '">' + (r.yoy > 0 ? '+' : '') + r.yoy.toFixed(1) + '%</td>';
+        tbody.appendChild(tr);
+    });
+    
+    // Sort click handlers
+    document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
+        th.onclick = () => {
+            let col = th.getAttribute('data-sort');
+            if (sortState.col === col) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+            else { sortState.col = col; sortState.dir = 'desc'; }
+            renderProductTable(tableId, filterId, targetMonth, data, sortState, side);
+        };
+    });
+    
+    // Filter handler
+    if (filterInput) {
+        filterInput.oninput = () => renderProductTable(tableId, filterId, targetMonth, data, sortState, side);
+    }
 }
 
 function updatePaymentDashboard() {
     const data = appData.payment;
     if (!data || data.length === 0) return;
-
-    let { current, last } = getComparisonMonths(currentDashboardMonth);
-
-    const currentData = data.filter(d => d['Reporting Month'] === current);
+    const mA = paymentMonthA;
+    const mB = paymentMonthB;
     
-    let labels = currentData.map(d => d['Payment Gateway']);
-    let revenue = currentData.map(d => d['Revenue']);
+    const dataA = data.filter(d => d['Reporting Month'] === mA);
+    const dataB = data.filter(d => d['Reporting Month'] === mB);
     
-    renderPieChart('paymentPieChart', labels, revenue);
-
+    renderPieChart('paymentPieChart', dataA.map(d => d['Payment Gateway']), dataA.map(d => d['Revenue']));
+    renderPieChart('paymentPieChartB', dataB.map(d => d['Payment Gateway']), dataB.map(d => d['Revenue']));
+    
     let tbody = document.querySelector('#paymentHistoryTable tbody');
     if (tbody) {
         tbody.innerHTML = '';
-        currentData.forEach(row => {
-            let gw = row['Payment Gateway'];
-            let lastRow = data.find(d => d['Reporting Month'] === last && d['Payment Gateway'] === gw) || {};
-            
+        let allGateways = [...new Set([...dataA.map(d => d['Payment Gateway']), ...dataB.map(d => d['Payment Gateway'])])];
+        allGateways.forEach(gw => {
+            let a = dataA.find(d => d['Payment Gateway'] === gw) || {};
+            let b = dataB.find(d => d['Payment Gateway'] === gw) || {};
             let tr = document.createElement('tr');
-            tr.innerHTML = `<td>${gw}</td>
-                            <td>${row.Orders || 0}</td>
-                            <td>£${(row.Revenue || 0).toLocaleString()}</td>
-                            <td>${lastRow.Orders || 0}</td>
-                            <td>£${(lastRow.Revenue || 0).toLocaleString()}</td>`;
+            tr.innerHTML = '<td>' + gw + '</td><td>' + (a.Orders || 0) + '</td><td>\u00A3' + (a.Revenue || 0).toLocaleString() + '</td><td>' + (b.Orders || 0) + '</td><td>\u00A3' + (b.Revenue || 0).toLocaleString() + '</td>';
             tbody.appendChild(tr);
         });
     }
+    
+    // Trend over range
+    const months = getMonthsInRange();
+    let totalRev = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['Revenue'] || 0), 0));
+    renderLineChart('paymentTrendChart', months.map(formatMonthLabel), { label: 'Total Revenue (\u00A3)', data: totalRev, color: '#009640' });
 }
 
-// Chart Builders
+// ===== CHART RENDERERS =====
+
+const dlOff = { plugins: { datalabels: { display: false } } };
+
 function renderDonutChart(canvasId, labels, data, colors) {
     var canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    var ctx = canvas.getContext('2d');
     if (window[canvasId] instanceof Chart) window[canvasId].destroy();
-    window[canvasId] = new Chart(ctx, {
+    window[canvasId] = new Chart(canvas.getContext('2d'), {
         type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '70%' }
+        data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%',
+            plugins: { datalabels: { color: '#fff', font: { size: 12, weight: 700 }, formatter: (v) => v > 0 ? v : '' } } }
     });
 }
 
 function renderPieChart(canvasId, labels, data) {
     var canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    var ctx = canvas.getContext('2d');
     if (window[canvasId] instanceof Chart) window[canvasId].destroy();
-    window[canvasId] = new Chart(ctx, {
+    window[canvasId] = new Chart(canvas.getContext('2d'), {
         type: 'pie',
-        data: {
-            labels: labels,
-            datasets: [{ data: data, backgroundColor: ['#009640', '#FFE600', '#373737'], borderWidth: 0 }]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
+        data: { labels: labels, datasets: [{ data: data, backgroundColor: ['#009640','#FFE600','#373737','#3B82F6','#EF4444','#8B5CF6'], borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins: { datalabels: { color: '#fff', font: { size: 11, weight: 700 }, formatter: (v) => '\u00A3' + Math.round(v).toLocaleString() } } }
     });
 }
 
 function renderBarChart(canvasId, labels, data, datasetLabel, color, axis) {
     var canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    var ctx = canvas.getContext('2d');
     if (window[canvasId] instanceof Chart) window[canvasId].destroy();
-    window[canvasId] = new Chart(ctx, {
+    window[canvasId] = new Chart(canvas.getContext('2d'), {
         type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{ label: datasetLabel, data: data, backgroundColor: color }]
-        },
+        data: { labels: labels, datasets: [{ label: datasetLabel, data: data, backgroundColor: color }] },
         options: { responsive: true, maintainAspectRatio: false, indexAxis: axis || 'x' }
     });
 }
@@ -679,55 +648,47 @@ function renderBarChart(canvasId, labels, data, datasetLabel, color, axis) {
 function renderLineChart(canvasId, labels, dataObj) {
     var canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    var ctx = canvas.getContext('2d');
     if (window[canvasId] instanceof Chart) window[canvasId].destroy();
-    
-    window[canvasId] = new Chart(ctx, {
+    window[canvasId] = new Chart(canvas.getContext('2d'), {
         type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: dataObj.label,
-                data: dataObj.data,
-                borderColor: dataObj.color || '#009640',
-                backgroundColor: 'rgba(0, 150, 64, 0.1)',
-                fill: true,
-                tension: 0.3,
-                borderWidth: 2,
-                pointBackgroundColor: dataObj.color || '#009640'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
+        data: { labels: labels, datasets: [{
+            label: dataObj.label, data: dataObj.data,
+            borderColor: dataObj.color || '#009640', backgroundColor: 'rgba(0,150,64,0.1)',
+            fill: true, tension: 0.3, borderWidth: 2, pointBackgroundColor: dataObj.color || '#009640'
+        }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } },
+            plugins: { datalabels: { display: function(ctx) { return ctx.dataIndex % 2 === 0 && ctx.dataset.data[ctx.dataIndex] > 0; },
+                formatter: (v) => Math.round(v).toLocaleString() } } }
     });
+}
+
+function renderMultiLineChart(canvasId, labels, datasets) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    if (window[canvasId] instanceof Chart) window[canvasId].destroy();
+    let dsets = datasets.map((ds, i) => ({
+        label: ds.label, data: ds.data,
+        borderColor: ds.color, backgroundColor: 'transparent',
+        tension: 0.3, borderWidth: 2, pointBackgroundColor: ds.color,
+        yAxisID: ds.yAxisID || 'y'
+    }));
+    let opts = { responsive: true, maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, position: 'left' } },
+        plugins: { datalabels: { display: false } } };
+    if (datasets.some(ds => ds.yAxisID === 'y1')) {
+        opts.scales.y1 = { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } };
+    }
+    window[canvasId] = new Chart(canvas.getContext('2d'), { type: 'line', data: { labels: labels, datasets: dsets }, options: opts });
 }
 
 function renderStackedBarChart(canvasId, labels, datasets) {
     var canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    var ctx = canvas.getContext('2d');
     if (window[canvasId] instanceof Chart) window[canvasId].destroy();
-    window[canvasId] = new Chart(ctx, {
+    window[canvasId] = new Chart(canvas.getContext('2d'), {
         type: 'bar',
-        data: {
-            labels: labels,
-            datasets: datasets
-        },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
-            scales: {
-                x: { stacked: false },
-                y: { stacked: false }
-            }
-        }
+        data: { labels: labels, datasets: datasets },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: false }, y: { stacked: false } } }
     });
 }
 

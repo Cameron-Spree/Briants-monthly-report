@@ -22,13 +22,13 @@
         </div>
         <div class="upload-zone" id="fileUploadZone">
             <div style="margin-right: 20px; display: flex; align-items: center; gap: 1rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <label for="globalDateFilter" style="font-weight: 600; color: #373737; font-size: 0.9rem;">Dashboard Month:</label>
-                    <input type="month" id="globalDateFilter" style="padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <label for="globalDateFrom" style="font-weight: 600; color: #373737; font-size: 0.85rem;">From:</label>
+                    <input type="month" id="globalDateFrom" style="padding: 0.35rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <label for="compareDateFilter" style="font-weight: 600; color: #373737; font-size: 0.9rem;">Compare Against:</label>
-                    <input type="month" id="compareDateFilter" style="padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <label for="globalDateTo" style="font-weight: 600; color: #373737; font-size: 0.85rem;">To:</label>
+                    <input type="month" id="globalDateTo" style="padding: 0.35rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
                 </div>
             </div>
             <input type="file" id="csvFileInput" accept=".csv" multiple />
@@ -42,7 +42,7 @@
             <nav class="tabs" id="tabNav">
                 <button class="tab-btn active" data-target="tab-executive">Executive Summary</button>
                 <button class="tab-btn" data-target="tab-customer">Customer Split</button>
-                <button class="tab-btn" data-target="tab-shipping">Shipping & Delivery</button>
+                <button class="tab-btn" data-target="tab-shipping">Shipping &amp; Delivery</button>
                 <button class="tab-btn" data-target="tab-product">Product Performance</button>
                 <button class="tab-btn" data-target="tab-payment">Payment Methods</button>
                 <button class="tab-btn" data-target="tab-sql">SQL Developer Hub</button>
@@ -61,19 +61,26 @@
                 
                 <div class="kpi-grid">
                     <div class="kpi-card">
-                        <h4>Total Revenue (Current)</h4>
+                        <h4>Total Revenue (Latest)</h4>
                         <div class="kpi-value" id="kpi-revenue">--</div>
                         <div class="kpi-trend" id="kpi-revenue-trend">-- MoM</div>
                     </div>
                     <div class="kpi-card">
-                        <h4>Total Orders (Current)</h4>
+                        <h4>Total Orders (Latest)</h4>
                         <div class="kpi-value" id="kpi-orders">--</div>
                         <div class="kpi-trend" id="kpi-orders-trend">-- MoM</div>
                     </div>
                     <div class="kpi-card">
-                        <h4>AOV (Current)</h4>
+                        <h4>AOV (Latest)</h4>
                         <div class="kpi-value" id="kpi-aov">--</div>
                         <div class="kpi-trend" id="kpi-aov-trend">-- MoM</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3>Revenue &amp; Orders Trend</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="executiveTrendChart"></canvas>
                     </div>
                 </div>
 
@@ -91,10 +98,17 @@
             <!-- Tab 2: Customer Split -->
             <section id="tab-customer" class="tab-content">
                 <h2 class="section-title">Customer Split</h2>
+
+                <div class="card tab-controls" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.25rem;">
+                    <span style="font-weight: 600; font-size: 0.9rem;">Compare:</span>
+                    <input type="month" id="customerMonthA" style="padding: 0.35rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                    <span style="font-weight: 600; font-size: 0.9rem;">vs</span>
+                    <input type="month" id="customerMonthB" style="padding: 0.35rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                </div>
                 
                 <div class="dashboard-grid">
                     <div class="chart-card">
-                        <h3>New vs Repeat (Current Month Orders)</h3>
+                        <h3>New vs Repeat Orders</h3>
                         <div class="chart-container donut-container">
                             <canvas id="repeatNewOrdersChart"></canvas>
                         </div>
@@ -107,8 +121,15 @@
                     </div>
                 </div>
                 
-                <div class="card">
-                    <h3>Average Order Value (AOV) Trend</h3>
+                <div class="card" style="margin-top: 1.5rem;">
+                    <h3>Customer Trend Over Time</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="customerTrendChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-top: 1.5rem;">
+                    <h3>AOV Comparison</h3>
                     <div class="chart-container">
                         <canvas id="customerAovChart"></canvas>
                     </div>
@@ -117,7 +138,21 @@
 
             <!-- Tab 3: Shipping & Delivery -->
             <section id="tab-shipping" class="tab-content">
-                <h2 class="section-title">Shipping & Delivery</h2>
+                <h2 class="section-title">Shipping &amp; Delivery</h2>
+
+                <div class="card tab-controls" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.25rem;">
+                    <span style="font-weight: 600; font-size: 0.9rem;">Compare:</span>
+                    <input type="month" id="shippingMonthA" style="padding: 0.35rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                    <span style="font-weight: 600; font-size: 0.9rem;">vs</span>
+                    <input type="month" id="shippingMonthB" style="padding: 0.35rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                </div>
+                
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3>Shipping Volume Trend</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="shippingTrendChart"></canvas>
+                    </div>
+                </div>
                 
                 <div class="dashboard-grid">
                     <div class="chart-card">
@@ -134,7 +169,7 @@
                     </div>
                 </div>
                 
-                <div class="card">
+                <div class="card" style="margin-top: 1.5rem;">
                     <h3>Total Order Revenue by Method</h3>
                     <div class="chart-container">
                         <canvas id="orderRevenueByMethodChart"></canvas>
@@ -148,9 +183,9 @@
                 
                 <div class="card" style="margin-bottom: 2rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3 class="product-category-heading" style="margin: 0;">Product Sales Trend (24 Months)</h3>
-                        <select id="productTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; min-width: 250px;">
-                            <option value="">Select a product...</option>
+                        <h3 class="product-category-heading" style="margin: 0;">Product Sales Trend</h3>
+                        <select id="productTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; min-width: 280px;">
+                            <option value="__ALL__">All Products (Total Revenue)</option>
                         </select>
                     </div>
                     <div class="chart-container" style="height: 300px;">
@@ -158,32 +193,48 @@
                     </div>
                 </div>
                 
-                <div class="dashboard-grid">
+                <!-- Two side-by-side comparison tables -->
+                <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <!-- Table A -->
                     <div class="card">
-                        <h3 class="product-category-heading">Top Performers</h3>
-                        <div class="table-container">
-                            <table class="data-table" id="topPerformersTable">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h3 class="product-category-heading" style="margin: 0;">Top Performers</h3>
+                            <input type="month" id="productTableMonthA" style="padding: 0.3rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                        </div>
+                        <input type="text" id="productFilterA" placeholder="Filter by SKU or name..." style="width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #E2E8F0; border-radius: 4px; margin-bottom: 0.75rem; font-family: inherit; font-size: 0.85rem; box-sizing: border-box;">
+                        <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+                            <table class="data-table sortable-table" id="productTableA">
                                 <thead>
                                     <tr>
-                                        <th>SKU</th>
-                                        <th>Product Name</th>
-                                        <th>Units</th>
-                                        <th>GMV</th>
+                                        <th data-sort="sku" style="cursor:pointer;">SKU &#x25B2;&#x25BC;</th>
+                                        <th data-sort="name" style="cursor:pointer;">Product &#x25B2;&#x25BC;</th>
+                                        <th data-sort="units" style="cursor:pointer;">Units &#x25B2;&#x25BC;</th>
+                                        <th data-sort="revenue" style="cursor:pointer;">Revenue &#x25B2;&#x25BC;</th>
+                                        <th data-sort="prevMom" style="cursor:pointer;">Prev M % &#x25B2;&#x25BC;</th>
+                                        <th data-sort="yoy" style="cursor:pointer;">YoY % &#x25B2;&#x25BC;</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
                             </table>
                         </div>
                     </div>
+                    <!-- Table B -->
                     <div class="card">
-                        <h3 class="product-category-heading">Movers & Shakers</h3>
-                        <div class="table-container">
-                            <table class="data-table" id="moversTable">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h3 class="product-category-heading" style="margin: 0;">Top Performers</h3>
+                            <input type="month" id="productTableMonthB" style="padding: 0.3rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                        </div>
+                        <input type="text" id="productFilterB" placeholder="Filter by SKU or name..." style="width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #E2E8F0; border-radius: 4px; margin-bottom: 0.75rem; font-family: inherit; font-size: 0.85rem; box-sizing: border-box;">
+                        <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+                            <table class="data-table sortable-table" id="productTableB">
                                 <thead>
                                     <tr>
-                                        <th>SKU</th>
-                                        <th>Product Name</th>
-                                        <th>Growth</th>
+                                        <th data-sort="sku" style="cursor:pointer;">SKU &#x25B2;&#x25BC;</th>
+                                        <th data-sort="name" style="cursor:pointer;">Product &#x25B2;&#x25BC;</th>
+                                        <th data-sort="units" style="cursor:pointer;">Units &#x25B2;&#x25BC;</th>
+                                        <th data-sort="revenue" style="cursor:pointer;">Revenue &#x25B2;&#x25BC;</th>
+                                        <th data-sort="prevMom" style="cursor:pointer;">Prev M % &#x25B2;&#x25BC;</th>
+                                        <th data-sort="yoy" style="cursor:pointer;">YoY % &#x25B2;&#x25BC;</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
@@ -196,32 +247,47 @@
             <!-- Tab 5: Payment Methods -->
             <section id="tab-payment" class="tab-content">
                 <h2 class="section-title">Payment Methods</h2>
+
+                <div class="card tab-controls" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.25rem;">
+                    <span style="font-weight: 600; font-size: 0.9rem;">Compare:</span>
+                    <input type="month" id="paymentMonthA" style="padding: 0.35rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                    <span style="font-weight: 600; font-size: 0.9rem;">vs</span>
+                    <input type="month" id="paymentMonthB" style="padding: 0.35rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3>Payment Revenue Trend</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="paymentTrendChart"></canvas>
+                    </div>
+                </div>
                 
                 <div class="dashboard-grid">
                     <div class="chart-card">
-                        <h3>Transaction Volume (Current Month)</h3>
+                        <h3>Revenue Split</h3>
                         <div class="chart-container donut-container">
-                            <canvas id="paymentVolumeChart"></canvas>
+                            <canvas id="paymentPieChart"></canvas>
                         </div>
                     </div>
                     <div class="chart-card">
-                        <h3>Revenue Split (Current Month)</h3>
+                        <h3>Revenue Split (Compare)</h3>
                         <div class="chart-container donut-container">
-                            <canvas id="paymentRevenueChart"></canvas>
+                            <canvas id="paymentPieChartB"></canvas>
                         </div>
                     </div>
                 </div>
+
                 <div class="card" style="margin-top: 1.5rem;">
-                    <h3>Historical Gateway Performance</h3>
+                    <h3>Gateway Comparison</h3>
                     <div class="table-container">
                         <table class="data-table" id="paymentHistoryTable">
                             <thead>
                                 <tr>
                                     <th>Gateway</th>
-                                    <th>Current Orders</th>
-                                    <th>Current Revenue</th>
-                                    <th>Last Month Orders</th>
-                                    <th>Last Month Rev</th>
+                                    <th>Month A Orders</th>
+                                    <th>Month A Revenue</th>
+                                    <th>Month B Orders</th>
+                                    <th>Month B Revenue</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -245,12 +311,13 @@
 
     <!-- Version Number -->
     <div style="position: fixed; bottom: 10px; right: 10px; font-size: 12px; color: #94A3B8; background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 4px; z-index: 1000;">
-        v1.2.0
+        v1.3.0
     </div>
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <!-- CodeMirror Core and Modes -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
