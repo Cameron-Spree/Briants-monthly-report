@@ -346,6 +346,82 @@ function initTabs() {
     });
 }
 
+function normalizeCsvHeader(header) {
+    return String(header || '')
+        .replace(/^\uFEFF/, '')
+        .replace(/\u00C2/g, '')
+        .replace(/\u00A0/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function canonicalCsvHeader(header) {
+    const cleaned = normalizeCsvHeader(header);
+    const lookupKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const aliases = {
+        'reporting month': 'Reporting Month',
+        'sku': 'SKU',
+        'product title': 'Product title',
+        'n revenue': 'N. Revenue',
+        'net revenue': 'N. Revenue',
+        'units': 'Units',
+        'category': 'Category',
+        'payment gateway': 'Payment Gateway',
+        'revenue': 'Revenue',
+        'orders': 'Orders',
+        'shipping method name': 'shipping_method_name',
+        'customer type': 'customer_type',
+        'average order value': 'average_order_value',
+        'total orders': 'total_orders',
+        'total revenue': 'total_revenue',
+        'total order revenue': 'total_order_revenue',
+        'total shipping revenue': 'total_shipping_revenue',
+        'product a': 'Product A',
+        'product b': 'Product B',
+        'times bought together': 'Times Bought Together',
+        'bought together': 'Times Bought Together',
+        'pair count': 'Times Bought Together',
+        'count distinct opl1 order id': 'Times Bought Together',
+        'count': 'Times Bought Together'
+    };
+    return aliases[lookupKey] || cleaned;
+}
+
+function normalizeCsvRow(row) {
+    const normalized = {};
+    Object.keys(row || {}).forEach(function(key) {
+        normalized[canonicalCsvHeader(key)] = row[key];
+    });
+    return normalized;
+}
+
+function csvHasFields(fields, requiredFields) {
+    return requiredFields.every(function(field) {
+        return fields.includes(field);
+    });
+}
+
+function parseCsvNumber(value) {
+    if (typeof value === 'number') return value;
+    const cleaned = String(value || '').replace(/,/g, '').trim();
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeBasketRows(rows) {
+    return rows.map(function(row) {
+        return {
+            'Product A': String(row['Product A'] || '').trim(),
+            'Product B': String(row['Product B'] || '').trim(),
+            'Times Bought Together': parseCsvNumber(row['Times Bought Together'])
+        };
+    }).filter(function(row) {
+        return row['Product A'] && row['Product B'] && row['Times Bought Together'] > 0;
+    }).sort(function(a, b) {
+        return b['Times Bought Together'] - a['Times Bought Together'];
+    });
+}
+
 function initFileUpload() {
     var fileInput = document.getElementById('csvFileInput');
     var statusText = document.getElementById('uploadStatus');
@@ -357,20 +433,22 @@ function initFileUpload() {
             statusText.style.color = '#373737';
             let filesProcessed = 0;
             let datasetsFound = [];
+            let unrecognizedFiles = [];
             for (let i = 0; i < files.length; i++) {
                 Papa.parse(files[i], {
                     header: true, dynamicTyping: true, skipEmptyLines: true,
+                    transformHeader: canonicalCsvHeader,
                     transform: function(value) {
                         if (typeof value === 'string') return value.replace(/\u00C2/g, '').trim();
                         return value;
                     },
                     complete: function(results) {
-                        const fields = results.meta.fields;
-                        const data = results.data;
+                        const fields = (results.meta.fields || []).map(canonicalCsvHeader).filter(Boolean);
+                        const data = (results.data || []).map(normalizeCsvRow);
                         if (fields.includes('SKU') || fields.includes('Product title')) {
                             appData.product = data; datasetsFound.push('Product');
-                        } else if (fields.includes('Times Bought Together')) {
-                            appData.basket = data; datasetsFound.push('Basket');
+                        } else if (csvHasFields(fields, ['Product A', 'Product B', 'Times Bought Together'])) {
+                            appData.basket = normalizeBasketRows(data); datasetsFound.push('Basket');
                         } else if (fields.includes('Payment Gateway')) {
                             appData.payment = data; datasetsFound.push('Payment');
                         } else if (fields.includes('shipping_method_name')) {
@@ -379,11 +457,18 @@ function initFileUpload() {
                             appData.customer = data; datasetsFound.push('Customer');
                         } else if (fields.includes('Reporting Month') && fields.includes('average_order_value')) {
                             appData.executive = data; datasetsFound.push('Executive');
+                        } else {
+                            unrecognizedFiles.push(files[i].name + ': ' + fields.join(', '));
                         }
                         filesProcessed++;
                         if (filesProcessed === files.length) {
-                            statusText.textContent = 'Loaded ' + datasetsFound.length + ' dataset(s): ' + datasetsFound.join(', ');
-                            statusText.style.color = '#009640';
+                            if (datasetsFound.length > 0) {
+                                statusText.textContent = 'Loaded ' + datasetsFound.length + ' dataset(s): ' + datasetsFound.join(', ');
+                                statusText.style.color = '#009640';
+                            } else {
+                                statusText.textContent = 'Loaded 0 datasets. Unrecognized CSV headers: ' + unrecognizedFiles.join(' | ');
+                                statusText.style.color = '#EF4444';
+                            }
                             updateDashboards();
                         }
                     }
@@ -1089,7 +1174,7 @@ function updateCategoryBrowser() {
 }
 
 function updateBasketDashboard() {
-    const data = appData.basket;
+    const data = normalizeBasketRows(appData.basket);
     if (!data || data.length === 0) return;
     
     const filterInput = document.getElementById('basketFilter');
@@ -1101,15 +1186,26 @@ function updateBasketDashboard() {
         let filtered = data;
         if (term) {
             filtered = data.filter(d => 
-                (String(d['Product A']) || "").toLowerCase().includes(term) || 
-                (String(d['Product B']) || "").toLowerCase().includes(term)
+                String(d['Product A'] || "").toLowerCase().includes(term) ||
+                String(d['Product B'] || "").toLowerCase().includes(term)
             );
         }
 
         tbody.innerHTML = '';
         filtered.slice(0, 100).forEach(d => {
             let tr = document.createElement('tr');
-            tr.innerHTML = '<td>' + d['Product A'] + '</td><td>' + d['Product B'] + '</td><td style="font-weight:600; color:#009640; text-align:center;">' + d['Times Bought Together'] + '</td>';
+            let productACell = document.createElement('td');
+            let productBCell = document.createElement('td');
+            let countCell = document.createElement('td');
+            productACell.textContent = d['Product A'];
+            productBCell.textContent = d['Product B'];
+            countCell.textContent = d['Times Bought Together'];
+            countCell.style.fontWeight = '600';
+            countCell.style.color = '#009640';
+            countCell.style.textAlign = 'center';
+            tr.appendChild(productACell);
+            tr.appendChild(productBCell);
+            tr.appendChild(countCell);
             tbody.appendChild(tr);
         });
 
