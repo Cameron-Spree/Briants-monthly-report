@@ -271,16 +271,33 @@ ORDER BY
     },
     {
         title: "5. Payment Gateway Distribution",
-        query: `-- Payment Methods Tab: Card vs PayPal vs Finance
-SELECT 
-    p.method as gateway_code,
-    COUNT(o.entity_id) as transaction_volume,
-    SUM(o.base_grand_total) as total_revenue
-FROM sales_order o
-JOIN sales_order_payment p ON o.entity_id = p.parent_id
-WHERE o.created_at >= '2026-04-01'
-GROUP BY 1
-ORDER BY transaction_volume DESC;`
+        query: `SELECT 
+    COALESCE(pm_pay.meta_value, 'Unknown/Free') AS \`Payment Gateway\`,
+    
+    -- Current Month (Apr 26)
+    COUNT(DISTINCT CASE WHEN p.post_date >= '2026-04-01 00:00:00' AND p.post_date <= '2026-04-30 23:59:59' THEN p.ID END) AS \`Apr 26 Orders\`,
+    SUM(CASE WHEN p.post_date >= '2026-04-01 00:00:00' AND p.post_date <= '2026-04-30 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`Apr 26 Revenue\`,
+    
+    -- Last Month (Mar 26)
+    COUNT(DISTINCT CASE WHEN p.post_date >= '2026-03-01 00:00:00' AND p.post_date <= '2026-03-31 23:59:59' THEN p.ID END) AS \`Mar 26 Orders\`,
+    SUM(CASE WHEN p.post_date >= '2026-03-01 00:00:00' AND p.post_date <= '2026-03-31 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`Mar 26 Revenue\`,
+    
+    -- Last Year (Apr 25)
+    COUNT(DISTINCT CASE WHEN p.post_date >= '2025-04-01 00:00:00' AND p.post_date <= '2025-04-30 23:59:59' THEN p.ID END) AS \`Apr 25 Orders\`,
+    SUM(CASE WHEN p.post_date >= '2025-04-01 00:00:00' AND p.post_date <= '2025-04-30 23:59:59' THEN pm_total.meta_value ELSE 0 END) AS \`Apr 25 Revenue\`
+
+FROM wp_posts p
+JOIN wp_postmeta pm_total ON p.ID = pm_total.post_id AND pm_total.meta_key = '_order_total'
+LEFT JOIN wp_postmeta pm_pay ON p.ID = pm_pay.post_id AND pm_pay.meta_key = '_payment_method_title'
+WHERE p.post_type = 'shop_order'
+  AND p.post_status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+  AND (
+      (p.post_date >= '2026-04-01 00:00:00' AND p.post_date <= '2026-04-30 23:59:59') OR
+      (p.post_date >= '2026-03-01 00:00:00' AND p.post_date <= '2026-03-31 23:59:59') OR
+      (p.post_date >= '2025-04-01 00:00:00' AND p.post_date <= '2025-04-30 23:59:59')
+  )
+GROUP BY \`Payment Gateway\`
+ORDER BY \`Apr 26 Revenue\` DESC;`
     }
 ];
 
