@@ -665,6 +665,30 @@ function updateProductDashboard() {
             selector.onchange = () => {
                 renderProductTrendChart(selector.value, data, months);
             };
+
+            const prevBtn = document.getElementById('productPrevBtn');
+            const nextBtn = document.getElementById('productNextBtn');
+            
+            if (prevBtn) {
+                prevBtn.onclick = () => {
+                    let i = selector.selectedIndex - 1;
+                    while (i >= 0 && selector.options[i].style.display === 'none') i--;
+                    if (i >= 0) {
+                        selector.selectedIndex = i;
+                        selector.dispatchEvent(new Event('change'));
+                    }
+                };
+            }
+            if (nextBtn) {
+                nextBtn.onclick = () => {
+                    let i = selector.selectedIndex + 1;
+                    while (i < selector.options.length && selector.options[i].style.display === 'none') i++;
+                    if (i < selector.options.length) {
+                        selector.selectedIndex = i;
+                        selector.dispatchEvent(new Event('change'));
+                    }
+                };
+            }
         } else {
             // If already initialized, just make sure we have the latest chart
             // But don't repopulate the whole list unless search is empty or we really need to
@@ -785,7 +809,33 @@ function updateCategoryDashboard() {
         if (currentSel && (currentSel === '__ALL__' || uniqueCategories.has(currentSel))) selector.value = currentSel;
         
         renderCategoryTrendChart(selector.value, data, months);
-        selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
+        
+        if (!selector.dataset.initialized) {
+            selector.dataset.initialized = "true";
+            selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
+
+            const prevBtn = document.getElementById('categoryPrevBtn');
+            const nextBtn = document.getElementById('categoryNextBtn');
+            
+            if (prevBtn) {
+                prevBtn.onclick = () => {
+                    if (selector.selectedIndex > 0) {
+                        selector.selectedIndex--;
+                        selector.dispatchEvent(new Event('change'));
+                    }
+                };
+            }
+            if (nextBtn) {
+                nextBtn.onclick = () => {
+                    if (selector.selectedIndex < selector.options.length - 1) {
+                        selector.selectedIndex++;
+                        selector.dispatchEvent(new Event('change'));
+                    }
+                };
+            }
+        } else {
+            selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
+        }
     }
 
     renderCategoryTable('categoryTableA', categoryTableMonthA, data, categorySortA);
@@ -1289,3 +1339,5 @@ function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, f
         fallingTbody.appendChild(tr);
     });
 }
+
+

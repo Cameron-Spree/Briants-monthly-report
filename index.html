@@ -189,9 +189,13 @@
                         <h3 class="product-category-heading" style="margin: 0;">Product Sales Trend</h3>
                         <div style="display: flex; flex-direction: column; gap: 0.4rem; min-width: 280px;">
                             <input type="text" id="productSearch" placeholder="Filter dropdown..." style="padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
-                            <select id="productTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit;">
-                                <option value="__ALL__">All Products (Total Revenue)</option>
-                            </select>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <button id="productPrevBtn" class="tab-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px;" title="Previous">&lt;</button>
+                                <select id="productTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; flex-grow: 1;">
+                                    <option value="__ALL__">All Products (Total Revenue)</option>
+                                </select>
+                                <button id="productNextBtn" class="tab-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px;" title="Next">&gt;</button>
+                            </div>
                         </div>
                     </div>
                     <div class="chart-container" style="height: 300px;">
@@ -273,9 +277,13 @@
                 <div class="card" style="margin-bottom: 2rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h3 class="product-category-heading" style="margin: 0;">Category Sales Trend</h3>
-                        <select id="categoryTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; min-width: 280px;">
-                            <option value="__ALL__">All Categories (Total Revenue)</option>
-                        </select>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; min-width: 280px;">
+                            <button id="categoryPrevBtn" class="tab-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px;" title="Previous">&lt;</button>
+                            <select id="categoryTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; flex-grow: 1;">
+                                <option value="__ALL__">All Categories (Total Revenue)</option>
+                            </select>
+                            <button id="categoryNextBtn" class="tab-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px;" title="Next">&gt;</button>
+                        </div>
                     </div>
                     <div class="chart-container" style="height: 300px;">
                         <canvas id="categoryTrendChart"></canvas>
