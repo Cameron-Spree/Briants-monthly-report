@@ -5,7 +5,8 @@ let appData = {
     shipping: null,
     product: null,
     payment: null,
-    basket: null
+    basket: null,
+    categoryHierarchy: null
 };
 
 let dateRangeFrom = "";
@@ -31,6 +32,7 @@ let categorySortB = { col: 'revenue', dir: 'desc' };
 
 let currentSqlScripts = [];
 let cmInstances = [];
+let categoryHierarchyLookupCache = { source: null, byName: null };
 
 // Register ChartJS datalabels plugin
 Chart.register(ChartDataLabels);
@@ -246,6 +248,23 @@ WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed'
 GROUP BY \`Product A\`, \`Product B\`
 HAVING \`Times Bought Together\` > 2
 ORDER BY \`Times Bought Together\` DESC;`
+        },
+        {
+            title: "7. Category Hierarchy Export",
+            query: `SELECT
+    t.term_id AS \`Category ID\`,
+    t.name AS \`Category Name\`,
+    t.slug AS \`Slug\`,
+    tt.parent AS \`Parent ID\`,
+    (SELECT name FROM wp_terms WHERE term_id = tt.parent) AS \`Parent Name\`
+FROM
+    wp_terms t
+INNER JOIN
+    wp_term_taxonomy tt ON t.term_id = tt.term_id
+WHERE
+    tt.taxonomy = 'product_cat'
+ORDER BY
+    tt.parent ASC;`
         }
     ];
 }
@@ -382,7 +401,12 @@ function canonicalCsvHeader(header) {
         'bought together': 'Times Bought Together',
         'pair count': 'Times Bought Together',
         'count distinct opl1 order id': 'Times Bought Together',
-        'count': 'Times Bought Together'
+        'count': 'Times Bought Together',
+        'category id': 'Category ID',
+        'category name': 'Category Name',
+        'slug': 'Slug',
+        'parent id': 'Parent ID',
+        'parent name': 'Parent Name'
     };
     return aliases[lookupKey] || cleaned;
 }
@@ -422,6 +446,20 @@ function normalizeBasketRows(rows) {
     });
 }
 
+function normalizeCategoryHierarchyRows(rows) {
+    return rows.map(function(row) {
+        return {
+            'Category ID': parseCsvNumber(row['Category ID']),
+            'Category Name': String(row['Category Name'] || '').trim(),
+            'Slug': String(row['Slug'] || '').trim(),
+            'Parent ID': parseCsvNumber(row['Parent ID']),
+            'Parent Name': String(row['Parent Name'] || '').trim()
+        };
+    }).filter(function(row) {
+        return row['Category ID'] && row['Category Name'];
+    });
+}
+
 function initFileUpload() {
     var fileInput = document.getElementById('csvFileInput');
     var statusText = document.getElementById('uploadStatus');
@@ -447,6 +485,8 @@ function initFileUpload() {
                         const data = (results.data || []).map(normalizeCsvRow);
                         if (fields.includes('SKU') || fields.includes('Product title')) {
                             appData.product = data; datasetsFound.push('Product');
+                        } else if (csvHasFields(fields, ['Category ID', 'Category Name', 'Parent ID', 'Parent Name'])) {
+                            appData.categoryHierarchy = normalizeCategoryHierarchyRows(data); datasetsFound.push('Category Hierarchy');
                         } else if (csvHasFields(fields, ['Product A', 'Product B', 'Times Bought Together'])) {
                             appData.basket = normalizeBasketRows(data); datasetsFound.push('Basket');
                         } else if (fields.includes('Payment Gateway')) {
@@ -512,7 +552,38 @@ function getYoyMonth(ym) {
 
 function getCategoryNames(row) {
     if (!row || !row.Category) return [];
-    return row.Category.split(',').map(c => c.trim()).filter(Boolean);
+    const categorySet = new Set();
+    row.Category.split(',').map(c => c.trim()).filter(Boolean).forEach(function(categoryName) {
+        addCategoryWithParents(categorySet, categoryName);
+    });
+    return Array.from(categorySet);
+}
+
+function getCategoryHierarchyLookup() {
+    const rows = appData.categoryHierarchy || [];
+    if (categoryHierarchyLookupCache.source === rows && categoryHierarchyLookupCache.byName) {
+        return categoryHierarchyLookupCache.byName;
+    }
+    const byName = {};
+    rows.forEach(function(row) {
+        if (row['Category Name']) byName[row['Category Name']] = row;
+    });
+    categoryHierarchyLookupCache = { source: rows, byName: byName };
+    return byName;
+}
+
+function addCategoryWithParents(categorySet, categoryName) {
+    const byName = getCategoryHierarchyLookup();
+    let currentName = categoryName;
+    let guard = 0;
+    while (currentName && guard < 20) {
+        categorySet.add(currentName);
+        const current = byName[currentName];
+        const parentName = current ? current['Parent Name'] : '';
+        if (!parentName || parentName === currentName) break;
+        currentName = parentName;
+        guard++;
+    }
 }
 
 function formatCurrency(amount) {
@@ -1219,19 +1290,18 @@ function updateCategoryBrowser() {
 
     let categories = new Set();
     data.forEach(d => {
-        if (d.Category) {
-            d.Category.split(',').forEach(c => categories.add(c.trim()));
-        }
+        getCategoryNames(d).forEach(c => categories.add(c));
     });
 
-    if (select.options.length <= 1) {
-        Array.from(categories).sort().forEach(cat => {
-            let opt = document.createElement('option');
-            opt.value = cat;
-            opt.textContent = cat;
-            select.appendChild(opt);
-        });
-    }
+    const currentCategory = select.value;
+    select.innerHTML = '<option value="">Select a category...</option>';
+    Array.from(categories).sort().forEach(cat => {
+        let opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        select.appendChild(opt);
+    });
+    if (currentCategory && categories.has(currentCategory)) select.value = currentCategory;
 
     const renderBrowserTable = () => {
         let cat = select.value;
@@ -1244,7 +1314,7 @@ function updateCategoryBrowser() {
         let seenSkus = new Set();
         let products = data.filter(d => {
             if (!d.Category || !d.SKU) return false;
-            let match = d.Category.split(',').map(c => c.trim()).includes(cat);
+            let match = getCategoryNames(d).includes(cat);
             if (match && !seenSkus.has(d.SKU)) {
                 seenSkus.add(d.SKU);
                 return true;
@@ -1261,10 +1331,7 @@ function updateCategoryBrowser() {
     };
 
     select.onchange = renderBrowserTable;
-    if (!select.dataset.listenerSet) {
-        select.dataset.listenerSet = "true";
-        renderBrowserTable();
-    }
+    renderBrowserTable();
 }
 
 function updateBasketDashboard() {
