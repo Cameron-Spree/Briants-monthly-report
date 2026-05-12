@@ -219,6 +219,39 @@ p {
 .trend-up { color: var(--primary-green); }
 .trend-down { color: #EF4444; }
 
+.trend-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.25rem;
+}
+
+.trend-summary-card {
+    background-color: #F8FAFC;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    min-width: 0;
+}
+
+.trend-summary-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.35rem;
+}
+
+.trend-summary-value {
+    display: block;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--main-text);
+    line-height: 1.2;
+}
+
 /* Buttons */
 .btn-primary {
     display: inline-block;
