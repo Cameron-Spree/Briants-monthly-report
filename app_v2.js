@@ -510,6 +510,46 @@ function getYoyMonth(ym) {
     return (y-1) + '-' + m.toString().padStart(2,'0');
 }
 
+function formatCurrency(amount) {
+    return '\u00A3' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatWholeNumber(value) {
+    return Math.round(value).toLocaleString();
+}
+
+function setElementText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function getPrimaryCategoryName(row) {
+    if (!row || !row.Category) return '';
+    return row.Category.split(',').map(c => c.trim())[0] || '';
+}
+
+function calculateTrendSummary(rows, months) {
+    const monthCount = months.length || 1;
+    const totals = rows.reduce((acc, row) => {
+        acc.revenue += (row['N. Revenue'] || 0);
+        acc.units += (row['Units'] || 0);
+        return acc;
+    }, { revenue: 0, units: 0 });
+    return {
+        totalRevenue: totals.revenue,
+        averageRevenue: totals.revenue / monthCount,
+        totalUnits: totals.units,
+        averageUnits: totals.units / monthCount
+    };
+}
+
+function updateTrendSummary(prefix, summary) {
+    setElementText(prefix + 'TotalRevenue', formatCurrency(summary.totalRevenue));
+    setElementText(prefix + 'AvgRevenue', formatCurrency(summary.averageRevenue));
+    setElementText(prefix + 'TotalUnits', formatWholeNumber(summary.totalUnits));
+    setElementText(prefix + 'AvgUnits', formatWholeNumber(summary.averageUnits));
+}
+
 function updateDashboards() {
     if (appData.executive) updateExecutiveDashboard();
     if (appData.customer) updateCustomerDashboard();
@@ -666,44 +706,32 @@ function updateProductDashboard() {
                 renderProductTrendChart(selector.value, data, months);
             };
 
-            const prevBtn = document.getElementById('productPrevBtn');
-            const nextBtn = document.getElementById('productNextBtn');
-            
-            if (prevBtn) {
+            let prevBtn = document.getElementById('productPrevBtn');
+            let nextBtn = document.getElementById('productNextBtn');
+            if (prevBtn && nextBtn) {
                 prevBtn.onclick = () => {
-                    let i = selector.selectedIndex - 1;
-                    while (i >= 0 && selector.options[i].style.display === 'none') i--;
-                    if (i >= 0) {
-                        selector.selectedIndex = i;
+                    if (selector.selectedIndex > 0) {
+                        selector.selectedIndex--;
                         selector.dispatchEvent(new Event('change'));
                     }
                 };
-            }
-            if (nextBtn) {
                 nextBtn.onclick = () => {
-                    let i = selector.selectedIndex + 1;
-                    while (i < selector.options.length && selector.options[i].style.display === 'none') i++;
-                    if (i < selector.options.length) {
-                        selector.selectedIndex = i;
+                    if (selector.selectedIndex < selector.options.length - 1) {
+                        selector.selectedIndex++;
                         selector.dispatchEvent(new Event('change'));
                     }
                 };
             }
         } else {
-            // If already initialized, just make sure we have the latest chart
-            // But don't repopulate the whole list unless search is empty or we really need to
-            // Actually, populateOptions handles preserving the selection, so it's safe to call
             populateOptions(searchInput.value);
         }
         
         renderProductTrendChart(selector.value, data, months);
     }
 
-    // Two comparison tables
     renderProductTable('productTableA', 'productFilterA', productTableMonthA, data, productSortA, 'A');
     renderProductTable('productTableB', 'productFilterB', productTableMonthB, data, productSortB, 'B');
 
-    // Rising & Falling Stars
     const latest = months[months.length - 1];
     const prev = months.length > 1 ? months[months.length - 2] : null;
     if (latest && prev) {
@@ -712,12 +740,20 @@ function updateProductDashboard() {
 }
 
 function renderProductTrendChart(sku, data, months) {
+    let filteredRows;
     let chartData;
     if (sku === '__ALL__') {
+        filteredRows = data.filter(d => months.includes(d['Reporting Month']));
         chartData = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['N. Revenue'] || 0), 0));
     } else {
-        chartData = months.map(m => { let r = data.find(d => d['Reporting Month'] === m && d.SKU === sku); return r ? (r['N. Revenue'] || 0) : 0; });
+        filteredRows = data.filter(d => months.includes(d['Reporting Month']) && d.SKU === sku);
+        chartData = months.map(m => {
+            return data
+                .filter(d => d['Reporting Month'] === m && d.SKU === sku)
+                .reduce((s, d) => s + (d['N. Revenue'] || 0), 0);
+        });
     }
+    updateTrendSummary('productTrend', calculateTrendSummary(filteredRows, months));
     renderLineChart('productTrendChart', months.map(formatMonthLabel), { label: 'Net Revenue (\u00A3)', data: chartData, color: '#009640' });
 }
 
@@ -746,11 +782,9 @@ function renderProductTable(tableId, filterId, targetMonth, data, sortState, sid
         };
     });
     
-    // Filter
     let filterText = filterInput ? filterInput.value.toLowerCase() : '';
     if (filterText) rows = rows.filter(r => r.sku.toLowerCase().includes(filterText) || r.name.toLowerCase().includes(filterText));
     
-    // Sort
     rows.sort((a, b) => {
         let va = a[sortState.col], vb = b[sortState.col];
         if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
@@ -766,7 +800,6 @@ function renderProductTable(tableId, filterId, targetMonth, data, sortState, sid
         tbody.appendChild(tr);
     });
     
-    // Sort click handlers
     document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
         th.onclick = () => {
             let col = th.getAttribute('data-sort');
@@ -776,7 +809,6 @@ function renderProductTable(tableId, filterId, targetMonth, data, sortState, sid
         };
     });
     
-    // Filter handler
     if (filterInput) {
         filterInput.oninput = () => renderProductTable(tableId, filterId, targetMonth, data, sortState, side);
     }
@@ -787,7 +819,6 @@ function updateCategoryDashboard() {
     if (!data || data.length === 0) return;
     const months = getMonthsInRange();
 
-    // Category trend chart
     let selector = document.getElementById('categoryTrendSelector');
     if (selector) {
         let uniqueCategories = new Set();
@@ -809,23 +840,20 @@ function updateCategoryDashboard() {
         if (currentSel && (currentSel === '__ALL__' || uniqueCategories.has(currentSel))) selector.value = currentSel;
         
         renderCategoryTrendChart(selector.value, data, months);
-        
-        if (!selector.dataset.initialized) {
-            selector.dataset.initialized = "true";
+
+        if (!selector.dataset.arrowsInitialized) {
+            selector.dataset.arrowsInitialized = "true";
             selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
 
-            const prevBtn = document.getElementById('categoryPrevBtn');
-            const nextBtn = document.getElementById('categoryNextBtn');
-            
-            if (prevBtn) {
+            let prevBtn = document.getElementById('categoryPrevBtn');
+            let nextBtn = document.getElementById('categoryNextBtn');
+            if (prevBtn && nextBtn) {
                 prevBtn.onclick = () => {
                     if (selector.selectedIndex > 0) {
                         selector.selectedIndex--;
                         selector.dispatchEvent(new Event('change'));
                     }
                 };
-            }
-            if (nextBtn) {
                 nextBtn.onclick = () => {
                     if (selector.selectedIndex < selector.options.length - 1) {
                         selector.selectedIndex++;
@@ -841,7 +869,6 @@ function updateCategoryDashboard() {
     renderCategoryTable('categoryTableA', categoryTableMonthA, data, categorySortA);
     renderCategoryTable('categoryTableB', categoryTableMonthB, data, categorySortB);
 
-    // Category Rising & Falling Stars
     const latest = months[months.length - 1];
     const prev = months.length > 1 ? months[months.length - 2] : null;
     if (latest && prev) {
@@ -850,15 +877,19 @@ function updateCategoryDashboard() {
 }
 
 function renderCategoryTrendChart(category, data, months) {
+    let filteredRows;
     let chartData;
     if (category === '__ALL__') {
+        filteredRows = data.filter(d => months.includes(d['Reporting Month']));
         chartData = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['N. Revenue'] || 0), 0));
     } else {
+        filteredRows = data.filter(d => months.includes(d['Reporting Month']) && getPrimaryCategoryName(d) === category);
         chartData = months.map(m => {
-            return data.filter(d => d['Reporting Month'] === m && d.Category && d.Category.split(',').map(c => c.trim())[0] === category)
+            return data.filter(d => d['Reporting Month'] === m && getPrimaryCategoryName(d) === category)
                        .reduce((s, d) => s + (d['N. Revenue'] || 0), 0);
         });
     }
+    updateTrendSummary('categoryTrend', calculateTrendSummary(filteredRows, months));
     renderLineChart('categoryTrendChart', months.map(formatMonthLabel), { label: 'Net Revenue (\u00A3)', data: chartData, color: '#009640' });
 }
 
@@ -895,7 +926,6 @@ function renderCategoryTable(tableId, targetMonth, data, sortState) {
         };
     });
     
-    // Sort
     rows.sort((a, b) => {
         let va = a[sortState.col], vb = b[sortState.col];
         if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
@@ -911,7 +941,6 @@ function renderCategoryTable(tableId, targetMonth, data, sortState) {
         tbody.appendChild(tr);
     });
 
-    // Sort click handlers
     document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
         th.onclick = () => {
             let col = th.getAttribute('data-sort');
@@ -947,7 +976,6 @@ function updatePaymentDashboard() {
         });
     }
     
-    // Trend over range
     const months = getMonthsInRange();
     let totalRev = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['Revenue'] || 0), 0));
     renderLineChart('paymentTrendChart', months.map(formatMonthLabel), { label: 'Total Revenue (\u00A3)', data: totalRev, color: '#009640' });
@@ -1339,5 +1367,4 @@ function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, f
         fallingTbody.appendChild(tr);
     });
 }
-
 
