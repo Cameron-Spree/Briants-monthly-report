@@ -510,6 +510,11 @@ function getYoyMonth(ym) {
     return (y-1) + '-' + m.toString().padStart(2,'0');
 }
 
+function getCategoryNames(row) {
+    if (!row || !row.Category) return [];
+    return row.Category.split(',').map(c => c.trim()).filter(Boolean);
+}
+
 function formatCurrency(amount) {
     return '\u00A3' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -723,15 +728,20 @@ function updateProductDashboard() {
                 };
             }
         } else {
+            // If already initialized, just make sure we have the latest chart
+            // But don't repopulate the whole list unless search is empty or we really need to
+            // Actually, populateOptions handles preserving the selection, so it's safe to call
             populateOptions(searchInput.value);
         }
         
         renderProductTrendChart(selector.value, data, months);
     }
 
+    // Two comparison tables
     renderProductTable('productTableA', 'productFilterA', productTableMonthA, data, productSortA, 'A');
     renderProductTable('productTableB', 'productFilterB', productTableMonthB, data, productSortB, 'B');
 
+    // Rising & Falling Stars
     const latest = months[months.length - 1];
     const prev = months.length > 1 ? months[months.length - 2] : null;
     if (latest && prev) {
@@ -782,9 +792,11 @@ function renderProductTable(tableId, filterId, targetMonth, data, sortState, sid
         };
     });
     
+    // Filter
     let filterText = filterInput ? filterInput.value.toLowerCase() : '';
     if (filterText) rows = rows.filter(r => r.sku.toLowerCase().includes(filterText) || r.name.toLowerCase().includes(filterText));
     
+    // Sort
     rows.sort((a, b) => {
         let va = a[sortState.col], vb = b[sortState.col];
         if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
@@ -800,6 +812,7 @@ function renderProductTable(tableId, filterId, targetMonth, data, sortState, sid
         tbody.appendChild(tr);
     });
     
+    // Sort click handlers
     document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
         th.onclick = () => {
             let col = th.getAttribute('data-sort');
@@ -809,6 +822,7 @@ function renderProductTable(tableId, filterId, targetMonth, data, sortState, sid
         };
     });
     
+    // Filter handler
     if (filterInput) {
         filterInput.oninput = () => renderProductTable(tableId, filterId, targetMonth, data, sortState, side);
     }
@@ -819,14 +833,12 @@ function updateCategoryDashboard() {
     if (!data || data.length === 0) return;
     const months = getMonthsInRange();
 
+    // Category trend chart
     let selector = document.getElementById('categoryTrendSelector');
     if (selector) {
         let uniqueCategories = new Set();
         data.forEach(d => {
-            if (d.Category) {
-                let cats = d.Category.split(',').map(c => c.trim());
-                if (cats.length > 0) uniqueCategories.add(cats[0]);
-            }
+            getCategoryNames(d).forEach(cat => uniqueCategories.add(cat));
         });
         
         let currentSel = selector.value;
@@ -869,6 +881,7 @@ function updateCategoryDashboard() {
     renderCategoryTable('categoryTableA', categoryTableMonthA, data, categorySortA);
     renderCategoryTable('categoryTableB', categoryTableMonthB, data, categorySortB);
 
+    // Category Rising & Falling Stars
     const latest = months[months.length - 1];
     const prev = months.length > 1 ? months[months.length - 2] : null;
     if (latest && prev) {
@@ -883,9 +896,9 @@ function renderCategoryTrendChart(category, data, months) {
         filteredRows = data.filter(d => months.includes(d['Reporting Month']));
         chartData = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['N. Revenue'] || 0), 0));
     } else {
-        filteredRows = data.filter(d => months.includes(d['Reporting Month']) && getPrimaryCategoryName(d) === category);
+        filteredRows = data.filter(d => months.includes(d['Reporting Month']) && getCategoryNames(d).includes(category));
         chartData = months.map(m => {
-            return data.filter(d => d['Reporting Month'] === m && getPrimaryCategoryName(d) === category)
+            return data.filter(d => d['Reporting Month'] === m && getCategoryNames(d).includes(category))
                        .reduce((s, d) => s + (d['N. Revenue'] || 0), 0);
         });
     }
@@ -903,11 +916,11 @@ function renderCategoryTable(tableId, targetMonth, data, sortState) {
     const getCategoryStats = (month) => {
         let stats = {};
         data.filter(d => d['Reporting Month'] === month).forEach(d => {
-            if (!d.Category) return;
-            let cat = d.Category.split(',').map(c => c.trim())[0];
-            if (!stats[cat]) stats[cat] = { name: cat, units: 0, revenue: 0 };
-            stats[cat].units += (d['Units'] || 0);
-            stats[cat].revenue += (d['N. Revenue'] || 0);
+            getCategoryNames(d).forEach(cat => {
+                if (!stats[cat]) stats[cat] = { name: cat, units: 0, revenue: 0 };
+                stats[cat].units += (d['Units'] || 0);
+                stats[cat].revenue += (d['N. Revenue'] || 0);
+            });
         });
         return stats;
     };
@@ -926,6 +939,7 @@ function renderCategoryTable(tableId, targetMonth, data, sortState) {
         };
     });
     
+    // Sort
     rows.sort((a, b) => {
         let va = a[sortState.col], vb = b[sortState.col];
         if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
@@ -941,6 +955,7 @@ function renderCategoryTable(tableId, targetMonth, data, sortState) {
         tbody.appendChild(tr);
     });
 
+    // Sort click handlers
     document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
         th.onclick = () => {
             let col = th.getAttribute('data-sort');
@@ -976,6 +991,7 @@ function updatePaymentDashboard() {
         });
     }
     
+    // Trend over range
     const months = getMonthsInRange();
     let totalRev = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['Revenue'] || 0), 0));
     renderLineChart('paymentTrendChart', months.map(formatMonthLabel), { label: 'Total Revenue (\u00A3)', data: totalRev, color: '#009640' });
@@ -1325,16 +1341,16 @@ function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, f
         });
     } else {
         data.filter(d => d['Reporting Month'] === month).forEach(d => {
-            if (!d.Category) return;
-            let cat = d.Category.split(',').map(c => c.trim())[0];
-            if (!stats[cat]) stats[cat] = { name: cat, curRev: 0, prevRev: 0 };
-            stats[cat].curRev += (d['N. Revenue'] || 0);
+            getCategoryNames(d).forEach(cat => {
+                if (!stats[cat]) stats[cat] = { name: cat, curRev: 0, prevRev: 0 };
+                stats[cat].curRev += (d['N. Revenue'] || 0);
+            });
         });
         data.filter(d => d['Reporting Month'] === prevMonth).forEach(d => {
-            if (!d.Category) return;
-            let cat = d.Category.split(',').map(c => c.trim())[0];
-            if (!stats[cat]) stats[cat] = { name: cat, curRev: 0, prevRev: 0 };
-            stats[cat].prevRev += (d['N. Revenue'] || 0);
+            getCategoryNames(d).forEach(cat => {
+                if (!stats[cat]) stats[cat] = { name: cat, curRev: 0, prevRev: 0 };
+                stats[cat].prevRev += (d['N. Revenue'] || 0);
+            });
         });
     }
 
@@ -1367,4 +1383,3 @@ function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, f
         fallingTbody.appendChild(tr);
     });
 }
-
