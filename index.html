@@ -198,6 +198,24 @@
                             </div>
                         </div>
                     </div>
+                    <div class="trend-summary-grid" id="productTrendSummary">
+                        <div class="trend-summary-card">
+                            <span class="trend-summary-label">Total Revenue</span>
+                            <strong class="trend-summary-value" id="productTrendTotalRevenue">--</strong>
+                        </div>
+                        <div class="trend-summary-card">
+                            <span class="trend-summary-label">Avg Monthly Revenue</span>
+                            <strong class="trend-summary-value" id="productTrendAvgRevenue">--</strong>
+                        </div>
+                        <div class="trend-summary-card">
+                            <span class="trend-summary-label">Total Units Sold</span>
+                            <strong class="trend-summary-value" id="productTrendTotalUnits">--</strong>
+                        </div>
+                        <div class="trend-summary-card">
+                            <span class="trend-summary-label">Avg Units Per Month</span>
+                            <strong class="trend-summary-value" id="productTrendAvgUnits">--</strong>
+                        </div>
+                    </div>
                     <div class="chart-container" style="height: 300px;">
                         <canvas id="productTrendChart"></canvas>
                     </div>
@@ -232,7 +250,7 @@
                     <div class="card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                             <h3 class="product-category-heading" style="margin: 0;">Top Performers</h3>
-                            <input type="month" id="productTableMonthB" style="padding: 0.3rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                            <input type="month" id="productTableMonthB" style="padding: 0.3rem; border: 1px solid #E2EF0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
                         </div>
                         <input type="text" id="productFilterB" placeholder="Filter by SKU or name..." style="width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #E2E8F0; border-radius: 4px; margin-bottom: 0.75rem; font-family: inherit; font-size: 0.85rem; box-sizing: border-box;">
                         <div class="table-container" style="max-height: 600px; overflow-y: auto;">
@@ -256,15 +274,15 @@
                 <!-- Rising & Falling Stars -->
                 <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
                     <div class="card">
-                        <h3 style="color: #009640;">&#x1F4C8; Rising Stars (Biggest £ Gains)</h3>
+                        <h3 style="color: #009640;">&#x1F4C8; Rising Stars (Biggest Â£ Gains)</h3>
                         <div class="table-container" style="max-height: 400px; overflow-y: auto;">
-                            <table class="data-table" id="productRisingStars"><thead><tr><th>SKU</th><th>Product</th><th>Prev Rev</th><th>Cur Rev</th><th>£ Change</th></tr></thead><tbody></tbody></table>
+                            <table class="data-table" id="productRisingStars"><thead><tr><th>SKU</th><th>Product</th><th>Prev Rev</th><th>Cur Rev</th><th>Â£ Change</th></tr></thead><tbody></tbody></table>
                         </div>
                     </div>
                     <div class="card">
-                        <h3 style="color: #EF4444;">&#x1F4C9; Falling Stars (Biggest £ Drops)</h3>
+                        <h3 style="color: #EF4444;">&#x1F4C9; Falling Stars (Biggest Â£ Drops)</h3>
                         <div class="table-container" style="max-height: 400px; overflow-y: auto;">
-                            <table class="data-table" id="productFallingStars"><thead><tr><th>SKU</th><th>Product</th><th>Prev Rev</th><th>Cur Rev</th><th>£ Change</th></tr></thead><tbody></tbody></table>
+                            <table class="data-table" id="productFallingStars"><thead><tr><th>SKU</th><th>Product</th><th>Prev Rev</th><th>Cur Rev</th><th>Â£ Change</th></tr></thead><tbody></tbody></table>
                         </div>
                     </div>
                 </div>
@@ -283,6 +301,24 @@
                                 <option value="__ALL__">All Categories (Total Revenue)</option>
                             </select>
                             <button id="categoryNextBtn" class="nav-arrow-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px; cursor: pointer; border: 1px solid #E2E8F0; border-radius: 4px; background: #fff; font-weight: 700;" title="Next">&gt;</button>
+                        </div>
+                    </div>
+                    <div class="trend-summary-grid" id="categoryTrendSummary">
+                        <div class="trend-summary-card">
+                            <span class="trend-summary-label">Total Revenue</span>
+                            <strong class="trend-summary-value" id="categoryTrendTotalRevenue">--</strong>
+                        </div>
+                        <div class="trend-summary-card">
+                            <span class="trend-summary-label">Avg Monthly Revenue</span>
+                            <strong class="trend-summary-value" id="categoryTrendAvgRevenue">--</strong>
+                        </div>
+                        <div class="trend-summary-card">
+                            <span class="trend-summary-label">Total Units Sold</span>
+                            <strong class="trend-summary-value" id="categoryTrendTotalUnits">--</strong>
+                        </div>
+                        <div class="trend-summary-card">
+                            <span class="trend-summary-label">Avg Units Per Month</span>
+                            <strong class="trend-summary-value" id="categoryTrendAvgUnits">--</strong>
                         </div>
                     </div>
                     <div class="chart-container" style="height: 300px;">
@@ -338,15 +374,15 @@
                 <!-- Category Rising & Falling Stars -->
                 <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
                     <div class="card">
-                        <h3 style="color: #009640;">&#x1F4C8; Rising Stars (Biggest £ Gains)</h3>
+                        <h3 style="color: #009640;">&#x1F4C8; Rising Stars (Biggest Â£ Gains)</h3>
                         <div class="table-container" style="max-height: 400px; overflow-y: auto;">
-                            <table class="data-table" id="categoryRisingStars"><thead><tr><th>Category</th><th>Prev Rev</th><th>Cur Rev</th><th>£ Change</th></tr></thead><tbody></tbody></table>
+                            <table class="data-table" id="categoryRisingStars"><thead><tr><th>Category</th><th>Prev Rev</th><th>Cur Rev</th><th>Â£ Change</th></tr></thead><tbody></tbody></table>
                         </div>
                     </div>
                     <div class="card">
-                        <h3 style="color: #EF4444;">&#x1F4C9; Falling Stars (Biggest £ Drops)</h3>
+                        <h3 style="color: #EF4444;">&#x1F4C9; Falling Stars (Biggest Â£ Drops)</h3>
                         <div class="table-container" style="max-height: 400px; overflow-y: auto;">
-                            <table class="data-table" id="categoryFallingStars"><thead><tr><th>Category</th><th>Prev Rev</th><th>Cur Rev</th><th>£ Change</th></tr></thead><tbody></tbody></table>
+                            <table class="data-table" id="categoryFallingStars"><thead><tr><th>Category</th><th>Prev Rev</th><th>Cur Rev</th><th>Â£ Change</th></tr></thead><tbody></tbody></table>
                         </div>
                     </div>
                 </div>
