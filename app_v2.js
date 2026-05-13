@@ -620,7 +620,15 @@ function initFileUpload() {
                         } else if (csvHasFields(fields, ['Category ID', 'Category Name', 'Parent ID', 'Parent Name'])) {
                             appData.categoryHierarchy = normalizeCategoryHierarchyRows(data); datasetsFound.push('Category Hierarchy');
                         } else if (csvHasFields(fields, ['Product A', 'Product B', 'Times Bought Together'])) {
-                            appData.basket = normalizeBasketRows(data); datasetsFound.push('Basket');
+                            appData.basket = normalizeBasketRows(data); datasetsFound.push('Basket Pairs');
+                        } else if (fields.includes('Basket Type') && fields.includes('Total Baskets')) {
+                            appData.basketProject = data; datasetsFound.push('Project Baskets');
+                        } else if (fields.includes('Average Days to Repurchase')) {
+                            appData.basketConsumables = data; datasetsFound.push('Consumables');
+                        } else if (fields.includes('Total Orders Containing Item') && fields.includes('Average Basket Value')) {
+                            appData.basketAnchors = data; datasetsFound.push('AOV Anchors');
+                        } else if (fields.includes('Cross-Category Status')) {
+                            appData.basketCrossCategory = data; datasetsFound.push('Cross Category');
                         } else if (fields.includes('Payment Gateway')) {
                             appData.payment = data; datasetsFound.push('Payment');
                         } else if (fields.includes('shipping_method_name')) {
@@ -1518,7 +1526,99 @@ function updateBasketDashboard() {
 
     if (filterInput) filterInput.oninput = renderTable;
     renderTable();
+
+    // 1. Project vs Maintenance
+    if (appData.basketProject && appData.basketProject.length > 0) {
+        let projBaskets = 0, maintBaskets = 0;
+        let projRev = 0, projCount = 0;
+        let maintRev = 0, maintCount = 0;
+        appData.basketProject.forEach(d => {
+            if (d['Basket Type'] === 'Project Basket') {
+                projBaskets += (d['Total Baskets'] || 0);
+                projRev += (d['Total Revenue'] || 0);
+                projCount += (d['Total Baskets'] || 0);
+            } else if (d['Basket Type'] === 'Maintenance Basket') {
+                maintBaskets += (d['Total Baskets'] || 0);
+                maintRev += (d['Total Revenue'] || 0);
+                maintCount += (d['Total Baskets'] || 0);
+            }
+        });
+        
+        let projAov = projCount > 0 ? (projRev / projCount) : 0;
+        let maintAov = maintCount > 0 ? (maintRev / maintCount) : 0;
+        
+        let pMetric = document.getElementById('projectAovMetric');
+        let mMetric = document.getElementById('maintenanceAovMetric');
+        if (pMetric) pMetric.textContent = '£' + Math.round(projAov).toLocaleString();
+        if (mMetric) mMetric.textContent = '£' + Math.round(maintAov).toLocaleString();
+
+        let canvas = document.getElementById('basketProjectSplitChart');
+        if (canvas) {
+            if (window['basketProjectSplitChart'] instanceof Chart) window['basketProjectSplitChart'].destroy();
+            window['basketProjectSplitChart'] = new Chart(canvas.getContext('2d'), {
+                type: 'doughnut',
+                data: { labels: ['Project', 'Maintenance'], datasets: [{ data: [projBaskets, maintBaskets], backgroundColor: ['#F59E0B', '#3B82F6'] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { color: '#fff', formatter: (val, ctx) => { let sum = ctx.dataset.data.reduce((a,b)=>a+b,0); return sum > 0 ? Math.round((val*100)/sum) + '%' : ''; } } } }
+            });
+        }
+    }
+
+    // 2. Cross-Category
+    if (appData.basketCrossCategory && appData.basketCrossCategory.length > 0) {
+        let multi = 0, single = 0;
+        appData.basketCrossCategory.forEach(d => {
+            if (d['Cross-Category Status'] === 'Multi-Category Basket') multi += (d['Total Baskets'] || 0);
+            else single += (d['Total Baskets'] || 0);
+        });
+        
+        let canvas = document.getElementById('crossCategoryGauge');
+        if (canvas) {
+            if (window['crossCategoryGauge'] instanceof Chart) window['crossCategoryGauge'].destroy();
+            window['crossCategoryGauge'] = new Chart(canvas.getContext('2d'), {
+                type: 'doughnut',
+                data: { labels: ['Multi-Category', 'Single-Category'], datasets: [{ data: [multi, single], backgroundColor: ['#8B5CF6', '#E2E8F0'] }] },
+                options: { rotation: -90, circumference: 180, responsive: true, maintainAspectRatio: false, plugins: { datalabels: { color: '#fff', formatter: (val, ctx) => { let sum = ctx.dataset.data.reduce((a,b)=>a+b,0); return sum > 0 ? Math.round((val*100)/sum) + '%' : ''; } } } }
+            });
+        }
+    }
+
+    // 3. Consumables Table
+    if (appData.basketConsumables && appData.basketConsumables.length > 0) {
+        const cBody = document.querySelector('#consumableVelocityTable tbody');
+        if (cBody) {
+            cBody.innerHTML = '';
+            let sorted = [...appData.basketConsumables].sort((a,b) => (b['Total Repeat Buyers']||0) - (a['Total Repeat Buyers']||0));
+            sorted.slice(0, 50).forEach(d => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = '<td>' + (d['Product Name']||'') + '</td><td>' + (d['Category']||'') + '</td><td style="text-align:center;">' + (d['Average Days to Repurchase']||0) + ' days</td><td style="font-weight:600; color:#009640; text-align:center;">' + (d['Total Repeat Buyers']||0) + '</td>';
+                cBody.appendChild(tr);
+            });
+        }
+    }
+
+    // 4. AOV Multipliers
+    if (appData.basketAnchors && appData.basketAnchors.length > 0) {
+        let anchorStats = {};
+        appData.basketAnchors.forEach(d => {
+            let name = d['Product Name'];
+            if (!name) return;
+            if (!anchorStats[name]) anchorStats[name] = { orders: 0, basketRev: 0 };
+            anchorStats[name].orders += (d['Total Orders Containing Item'] || 0);
+            anchorStats[name].basketRev += (d['Total Basket Revenue'] || 0);
+        });
+        
+        let anchorList = Object.keys(anchorStats).map(name => {
+            let s = anchorStats[name];
+            return { name: name, avgAov: s.orders > 0 ? (s.basketRev / s.orders) : 0, orders: s.orders };
+        });
+        
+        let topAnchors = anchorList.sort((a,b) => b.avgAov - a.avgAov).filter(a => a.orders > 3).slice(0, 10);
+        if (topAnchors.length === 0) topAnchors = anchorList.sort((a,b) => b.avgAov - a.avgAov).slice(0, 10);
+        
+        renderBarChart('aovMultipliersChart', topAnchors.map(a => a.name.substring(0, 25)), topAnchors.map(a => Math.round(a.avgAov)), 'Avg Basket Value (£)', '#EF4444', 'y');
+    }
 }
+
 
 function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, fallingTableId) {
     const risingTbody = document.querySelector('#' + risingTableId + ' tbody');
@@ -1582,3 +1682,4 @@ function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, f
         fallingTbody.appendChild(tr);
     });
 }
+
