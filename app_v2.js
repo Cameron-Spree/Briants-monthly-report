@@ -265,6 +265,138 @@ WHERE
     tt.taxonomy = 'product_cat'
 ORDER BY
     tt.parent ASC;`
+        },
+        {
+            title: "8. Project vs. Maintenance Baskets",
+            query: `SELECT 
+    \`Reporting Month\`,
+    \`Basket Type\`,
+    COUNT(order_id) AS \`Total Baskets\`,
+    SUM(order_revenue) AS \`Total Revenue\`,
+    SUM(order_revenue) / COUNT(order_id) AS \`Average Order Value\`
+FROM (
+    -- STEP 1: Tag each individual order as Project or Maintenance
+    SELECT 
+        os.order_id,
+        DATE_FORMAT(os.date_created, '%Y-%m') AS \`Reporting Month\`,
+        os.net_total AS order_revenue,
+        CASE 
+            WHEN COUNT(DISTINCT opl.product_id) > 3 OR SUM(opl.product_qty) > 15 THEN 'Project Basket'
+            ELSE 'Maintenance Basket'
+        END AS \`Basket Type\`
+    FROM wp_wc_order_stats os
+    JOIN wp_wc_order_product_lookup opl ON os.order_id = opl.order_id
+    WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+      AND os.date_created >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+    GROUP BY os.order_id, \`Reporting Month\`, os.net_total
+) AS order_classifications
+-- STEP 2: Group the tagged orders by Month and Type
+GROUP BY \`Reporting Month\`, \`Basket Type\`
+ORDER BY \`Reporting Month\` DESC;`
+        },
+        {
+            title: "9. Consumable Replenishment Velocity",
+            query: `SELECT
+    COALESCE(NULLIF(var_p.post_title, ''), parent_p.post_title) AS \`Product Name\`,
+    cat.name AS \`Category\`,
+    COUNT(DISTINCT repeat_purchases.customer_email) AS \`Total Repeat Buyers\`,
+    ROUND(AVG(DATEDIFF(last_purchase, first_purchase) / (purchase_count - 1)), 0) AS \`Average Days to Repurchase\`
+FROM (
+    SELECT 
+        opl.product_id,
+        opl.variation_id,
+        pm.meta_value AS customer_email,
+        COUNT(DISTINCT opl.order_id) AS purchase_count,
+        MIN(opl.date_created) AS first_purchase,
+        MAX(opl.date_created) AS last_purchase
+    FROM wp_wc_order_product_lookup opl
+    JOIN wp_wc_order_stats os ON os.order_id = opl.order_id
+    JOIN wp_postmeta pm ON pm.post_id = opl.order_id AND pm.meta_key = '_billing_email'
+    WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+      AND os.date_created >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+    GROUP BY opl.product_id, opl.variation_id, pm.meta_value
+    HAVING COUNT(DISTINCT opl.order_id) > 1
+) AS repeat_purchases
+JOIN wp_posts parent_p ON parent_p.ID = repeat_purchases.product_id
+LEFT JOIN wp_posts var_p ON var_p.ID = repeat_purchases.variation_id AND repeat_purchases.variation_id > 0
+JOIN wp_term_relationships tr ON tr.object_id = repeat_purchases.product_id
+JOIN wp_term_taxonomy tt ON tt.term_taxonomy_id = tr.term_taxonomy_id AND tt.taxonomy = 'product_cat'
+JOIN wp_terms cat ON cat.term_id = tt.term_id
+WHERE cat.name IN (
+    'Oils, Fuels & Maintenance', 
+    'Fuels & Oils', 
+    'Lubricants & Cleaners', 
+    'Pressure Washer Fluids', 
+    'Chainsaw Chains', 
+    'Semi Chisel Chains', 
+    'Full Chisel Chains', 
+    'Milling Chains', 
+    'Trimmer Lines, Heads & Blades', 
+    'Trimmer Line', 
+    'Trimmer Spools', 
+    'Spark Plugs', 
+    'Service Kits', 
+    'Wood Treatments and Preservatives', 
+    'Plant Feeds and Lawn Care', 
+    'Weed Killers and Tree Stump Killers', 
+    'Compost and Bark', 
+    'Pest Control', 
+    'Screws, Nails & Fixings', 
+    'Screws - Nails - Bolts and Staples', 
+    'Masonry Fixings', 
+    'Glue and Adhesive Tape', 
+    'Rock Salt', 
+    'Coal and Logs', 
+    'Charcoal and BBQ'
+) 
+GROUP BY \`Product Name\`, \`Category\`
+ORDER BY \`Total Repeat Buyers\` DESC;`
+        },
+        {
+            title: "10. Top AOV Multipliers (High-Value Anchors)",
+            query: `SELECT 
+    DATE_FORMAT(os.date_created, '%Y-%m') AS \`Reporting Month\`,
+    COALESCE(NULLIF(var_p.post_title, ''), parent_p.post_title) AS \`Product Name\`,
+    COUNT(DISTINCT os.order_id) AS \`Total Orders Containing Item\`,
+    SUM(opl.product_net_revenue) AS \`Item Direct Revenue\`,
+    SUM(os.net_total) AS \`Total Basket Revenue\`,
+    SUM(os.net_total) / COUNT(DISTINCT os.order_id) AS \`Average Basket Value\`
+FROM wp_wc_order_product_lookup opl
+JOIN wp_wc_order_stats os ON os.order_id = opl.order_id
+LEFT JOIN wp_posts parent_p ON parent_p.ID = opl.product_id
+LEFT JOIN wp_posts var_p ON var_p.ID = opl.variation_id AND opl.variation_id > 0
+WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+  AND os.date_created >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+GROUP BY \`Reporting Month\`, opl.product_id, opl.variation_id
+HAVING \`Total Orders Containing Item\` > 1 
+ORDER BY \`Reporting Month\` DESC, \`Average Basket Value\` DESC;`
+        },
+        {
+            title: "11. Cross-Category Penetration Rate",
+            query: `SELECT 
+    \`Reporting Month\`,
+    CASE 
+        WHEN \`Distinct Categories\` > 1 THEN 'Multi-Category Basket'
+        ELSE 'Single-Category Basket'
+    END AS \`Cross-Category Status\`,
+    COUNT(order_id) AS \`Total Baskets\`
+FROM (
+    SELECT 
+        os.order_id,
+        DATE_FORMAT(os.date_created, '%Y-%m') AS \`Reporting Month\`,
+        COUNT(DISTINCT cat.term_id) AS \`Distinct Categories\`
+    FROM wp_wc_order_stats os
+    JOIN wp_wc_order_product_lookup opl ON os.order_id = opl.order_id
+    JOIN wp_term_relationships tr ON tr.object_id = opl.product_id
+    JOIN wp_term_taxonomy tt ON tt.term_taxonomy_id = tr.term_taxonomy_id AND tt.taxonomy = 'product_cat'
+    JOIN wp_terms cat ON cat.term_id = tt.term_id
+    WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
+      AND os.date_created >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+      AND tt.parent = 0 -- This ensures it only counts Top-Level Categories
+    GROUP BY os.order_id, \`Reporting Month\`
+) AS order_cats
+GROUP BY \`Reporting Month\`, \`Cross-Category Status\`
+ORDER BY \`Reporting Month\` DESC;`
         }
     ];
 }

@@ -431,7 +431,7 @@
                 <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- Widget 1: Project vs. Maintenance Split -->
                     <div class="chart-card">
-                        <h3>Project vs. Maintenance Baskets</h3>
+                        <h3 style="display:flex; align-items:center; gap: 0.5rem;">Project vs. Maintenance Baskets <span title="Categorizes baskets based on item quantity/variety to show if orders are typically large projects or single-item maintenance purchases." style="cursor:help; background:#e2e8f0; color:#475569; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px;">?</span></h3>
                         <div class="summary-metrics" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
                             <div class="metric-card" style="flex: 1; min-width: 120px; padding: 1rem; background: #F8FAFC; border-radius: 8px; text-align: center; border: 1px solid #E2E8F0;">
                                 <div style="font-size: 0.85rem; color: #64748B;">Project AOV</div>
@@ -449,7 +449,7 @@
                     
                     <!-- Widget 4: Cross-Category Penetration -->
                     <div class="chart-card">
-                        <h3>Cross-Category Penetration Rate</h3>
+                        <h3 style="display:flex; align-items:center; gap: 0.5rem;">Cross-Category Penetration Rate <span title="Shows the percentage of orders containing items from more than one distinct top-level category." style="cursor:help; background:#e2e8f0; color:#475569; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px;">?</span></h3>
                         <div class="chart-container donut-container" style="height: 200px;">
                             <canvas id="crossCategoryGauge"></canvas>
                         </div>
@@ -465,7 +465,7 @@
                 <div class="dashboard-grid" style="grid-template-columns: 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- Widget 3: High-Value Anchors / AOV Multipliers -->
                     <div class="card">
-                        <h3>Top AOV Multipliers</h3>
+                        <h3 style="display:flex; align-items:center; gap: 0.5rem;">Top AOV Multipliers <span title="Highlights individual products that, when included in a basket, result in the highest total Average Order Value." style="cursor:help; background:#e2e8f0; color:#475569; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px;">?</span></h3>
                         <div class="chart-container" style="height: 350px;">
                             <canvas id="aovMultipliersChart"></canvas>
                         </div>
@@ -474,7 +474,7 @@
 
                 <div class="card" style="margin-bottom: 1.5rem;">
                     <!-- Widget 2: Consumable Replenishment Velocity -->
-                    <h3>Consumable Reorder Rates</h3>
+                    <h3 style="display:flex; align-items:center; gap: 0.5rem;">Consumable Reorder Rates <span title="Tracks specific consumable items to show how many days it typically takes for customers to purchase them again." style="cursor:help; background:#e2e8f0; color:#475569; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px;">?</span></h3>
                     <div class="table-container" style="max-height: 400px; overflow-y: auto;">
                         <table class="data-table" id="consumableVelocityTable">
                             <thead>
