@@ -427,6 +427,69 @@
                         </div>
                     </div>
                 </div>
+                <!-- Advanced Behavioral Widgets -->
+                <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <!-- Widget 1: Project vs. Maintenance Split -->
+                    <div class="chart-card">
+                        <h3>Project vs. Maintenance Baskets</h3>
+                        <div class="summary-metrics" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <div class="metric-card" style="flex: 1; min-width: 120px; padding: 1rem; background: #F8FAFC; border-radius: 8px; text-align: center; border: 1px solid #E2E8F0;">
+                                <div style="font-size: 0.85rem; color: #64748B;">Project AOV</div>
+                                <div id="projectAovMetric" style="font-size: 1.25rem; font-weight: 700; color: #0f172a;">£--</div>
+                            </div>
+                            <div class="metric-card" style="flex: 1; min-width: 120px; padding: 1rem; background: #F8FAFC; border-radius: 8px; text-align: center; border: 1px solid #E2E8F0;">
+                                <div style="font-size: 0.85rem; color: #64748B;">Maintenance AOV</div>
+                                <div id="maintenanceAovMetric" style="font-size: 1.25rem; font-weight: 700; color: #0f172a;">£--</div>
+                            </div>
+                        </div>
+                        <div class="chart-container donut-container" style="height: 250px;">
+                            <canvas id="basketProjectSplitChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Widget 4: Cross-Category Penetration -->
+                    <div class="chart-card">
+                        <h3>Cross-Category Penetration Rate</h3>
+                        <div class="chart-container donut-container" style="height: 200px;">
+                            <canvas id="crossCategoryGauge"></canvas>
+                        </div>
+                        <div class="table-container" style="max-height: 180px; overflow-y: auto; margin-top: 1rem;">
+                            <table class="data-table" id="crossCategoryTable">
+                                <thead><tr><th>Category Pair</th><th>Orders</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid" style="grid-template-columns: 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <!-- Widget 3: High-Value Anchors / AOV Multipliers -->
+                    <div class="card">
+                        <h3>Top AOV Multipliers</h3>
+                        <div class="chart-container" style="height: 350px;">
+                            <canvas id="aovMultipliersChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <!-- Widget 2: Consumable Replenishment Velocity -->
+                    <h3>Consumable Reorder Rates</h3>
+                    <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                        <table class="data-table" id="consumableVelocityTable">
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Category</th>
+                                    <th>Avg Days to Repurchase</th>
+                                    <th>Total Repeat Buyers &#x25BC;</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="card">
                     <h3>Product Pairings</h3>
                     <div class="table-container" style="max-height: 600px; overflow-y: auto;">
