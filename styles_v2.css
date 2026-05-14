@@ -371,3 +371,22 @@ p {
     min-height: 100px;
     font-family: 'Consolas', 'Monaco', monospace;
 }
+
+/* Status Badges */
+.status-badge {
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-loaded {
+    background-color: #DCFCE7;
+    color: #166534;
+}
+
+.status-empty {
+    background-color: #F1F5F9;
+    color: #64748B;
+}

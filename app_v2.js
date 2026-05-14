@@ -6,9 +6,13 @@ let appData = {
     product: null,
     payment: null,
     basket: null,
-    categoryHierarchy: null
+    categoryHierarchy: null,
+    basketProject: null,
+    basketConsumables: null,
+    basketAnchors: null,
+    basketCrossCategory: null,
+    uploadMeta: {}
 };
-
 let dateRangeFrom = "";
 let dateRangeTo = "";
 
@@ -492,7 +496,10 @@ function initTabs() {
             tabContents.forEach(function(c) { c.classList.remove('active'); });
             btn.classList.add('active');
             var targetEl = document.getElementById(btn.getAttribute('data-target'));
-            if (targetEl) targetEl.classList.add('active');
+            if (targetEl) {
+                targetEl.classList.add('active');
+                if (btn.getAttribute('data-target') === 'tab-data') updateDataStatusTab();
+            }
         });
     });
 }
@@ -615,28 +622,43 @@ function initFileUpload() {
                     complete: function(results) {
                         const fields = (results.meta.fields || []).map(canonicalCsvHeader).filter(Boolean);
                         const data = (results.data || []).map(normalizeCsvRow);
+                        const timestamp = new Date().toLocaleString();
+                        
+                        const recordLoad = (key, name) => {
+                            appData[key] = data;
+                            datasetsFound.push(name);
+                            if (!appData.uploadMeta) appData.uploadMeta = {};
+                            appData.uploadMeta[key] = timestamp;
+                        };
+
                         if (fields.includes('SKU') || fields.includes('Product title')) {
-                            appData.product = data; datasetsFound.push('Product');
+                            recordLoad('product', 'Product');
                         } else if (csvHasFields(fields, ['Category ID', 'Category Name', 'Parent ID', 'Parent Name'])) {
-                            appData.categoryHierarchy = normalizeCategoryHierarchyRows(data); datasetsFound.push('Category Hierarchy');
+                            appData.categoryHierarchy = normalizeCategoryHierarchyRows(data);
+                            datasetsFound.push('Category Hierarchy');
+                            if (!appData.uploadMeta) appData.uploadMeta = {};
+                            appData.uploadMeta['categoryHierarchy'] = timestamp;
                         } else if (csvHasFields(fields, ['Product A', 'Product B', 'Times Bought Together'])) {
-                            appData.basket = normalizeBasketRows(data); datasetsFound.push('Basket Pairs');
+                            appData.basket = normalizeBasketRows(data);
+                            datasetsFound.push('Basket Pairs');
+                            if (!appData.uploadMeta) appData.uploadMeta = {};
+                            appData.uploadMeta['basket'] = timestamp;
                         } else if (fields.includes('Basket Type') && fields.includes('Total Baskets')) {
-                            appData.basketProject = data; datasetsFound.push('Project Baskets');
+                            recordLoad('basketProject', 'Project Baskets');
                         } else if (fields.includes('Average Days to Repurchase')) {
-                            appData.basketConsumables = data; datasetsFound.push('Consumables');
+                            recordLoad('basketConsumables', 'Consumables');
                         } else if (fields.includes('Total Orders Containing Item') && fields.includes('Average Basket Value')) {
-                            appData.basketAnchors = data; datasetsFound.push('AOV Anchors');
+                            recordLoad('basketAnchors', 'AOV Anchors');
                         } else if (fields.includes('Cross-Category Status')) {
-                            appData.basketCrossCategory = data; datasetsFound.push('Cross Category');
+                            recordLoad('basketCrossCategory', 'Cross Category');
                         } else if (fields.includes('Payment Gateway')) {
-                            appData.payment = data; datasetsFound.push('Payment');
+                            recordLoad('payment', 'Payment');
                         } else if (fields.includes('shipping_method_name')) {
-                            appData.shipping = data; datasetsFound.push('Shipping');
+                            recordLoad('shipping', 'Shipping');
                         } else if (fields.includes('customer_type')) {
-                            appData.customer = data; datasetsFound.push('Customer');
+                            recordLoad('customer', 'Customer');
                         } else if (fields.includes('Reporting Month') && fields.includes('average_order_value')) {
-                            appData.executive = data; datasetsFound.push('Executive');
+                            recordLoad('executive', 'Executive');
                         } else {
                             unrecognizedFiles.push(files[i].name + ': ' + fields.join(', '));
                         }
@@ -777,7 +799,67 @@ function updateDashboards() {
     }
     if (appData.basket) updateBasketDashboard();
     if (appData.payment) updatePaymentDashboard();
+    updateDataStatusTab();
     saveAppDataToDB();
+}
+
+function updateDataStatusTab() {
+    const tbody = document.querySelector('#dataStatusTable tbody');
+    if (!tbody) return;
+
+    const datasets = [
+        { key: 'executive', name: 'Executive Summary' },
+        { key: 'customer', name: 'Customer Split' },
+        { key: 'shipping', name: 'Shipping & Delivery' },
+        { key: 'product', name: 'Product/Category Performance' },
+        { key: 'categoryHierarchy', name: 'Category Hierarchy' },
+        { key: 'payment', name: 'Payment Methods' },
+        { key: 'basket', name: 'Basket Pairs' },
+        { key: 'basketProject', name: 'Project Baskets' },
+        { key: 'basketConsumables', name: 'Consumables' },
+        { key: 'basketAnchors', name: 'AOV Anchors' },
+        { key: 'basketCrossCategory', name: 'Cross Category' }
+    ];
+
+    tbody.innerHTML = '';
+    datasets.forEach(ds => {
+        const isLoaded = !!(appData[ds.key] && (Array.isArray(appData[ds.key]) ? appData[ds.key].length > 0 : true));
+        const timestamp = appData.uploadMeta ? appData.uploadMeta[ds.key] : null;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight: 600;">${ds.name}</td>
+            <td>
+                <span class="status-badge ${isLoaded ? 'status-loaded' : 'status-empty'}">
+                    ${isLoaded ? 'Loaded' : 'Empty'}
+                </span>
+            </td>
+            <td style="color: #64748B; font-size: 0.85rem;">${timestamp || '--'}</td>
+            <td style="text-align: right;">
+                ${isLoaded ? `<button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-color: #EF4444; color: #EF4444;" onclick="deleteDataset('${ds.key}')">Delete</button>` : '--'}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function deleteDataset(key) {
+    if (!confirm('Are you sure you want to delete this dataset? All associated dashboard views will be cleared.')) return;
+    
+    appData[key] = null;
+    if (appData.uploadMeta) delete appData.uploadMeta[key];
+    
+    // Special cleanup for hierarchy cache
+    if (key === 'categoryHierarchy') {
+        categoryHierarchyLookupCache = { source: null, byName: null };
+    }
+
+    // Refresh everything
+    updateDashboards();
+    
+    // Clear status text
+    const statusText = document.getElementById('uploadStatus');
+    if (statusText) statusText.textContent = 'Dataset deleted.';
 }
 
 function updateTrendElement(id, value, suffix) {
@@ -794,8 +876,6 @@ function updateTrendElement(id, value, suffix) {
         el.className = 'kpi-trend';
     }
 }
-
-// ===== DASHBOARD UPDATES =====
 
 function updateExecutiveDashboard() {
     const data = appData.executive;

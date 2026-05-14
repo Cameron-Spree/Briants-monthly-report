@@ -49,6 +49,7 @@
                 <button class="tab-btn" data-target="tab-basket">Basket Analysis</button>
                 <button class="tab-btn" data-target="tab-payment">Payment Methods</button>
                 <button class="tab-btn" data-target="tab-sql">SQL Developer Hub</button>
+                <button class="tab-btn" data-target="tab-data" style="margin-top: auto; border-top: 1px solid #E2E8F0; padding-top: 1rem; color: #64748B;">Data Management</button>
             </nav>
             
             <div class="api-key-zone">
@@ -561,6 +562,29 @@
                 </div>
                 <div class="sql-scripts-container" id="sqlScriptsContainer">
                     <!-- Script Blocks injected via JS -->
+                </div>
+            </section>
+            <!-- Tab 10: Data Management -->
+            <section id="tab-data" class="tab-content">
+                <h2 class="section-title">Data Management</h2>
+                <div class="card">
+                    <p style="margin-bottom: 1.5rem; color: #64748B; font-size: 0.95rem; line-height: 1.5;">
+                        Monitor the status of your data ingestion. Each row below represents a required dataset. 
+                        You can see when each was last uploaded or delete them to perform a fresh import.
+                    </p>
+                    <table class="data-table" id="dataStatusTable">
+                        <thead>
+                            <tr>
+                                <th>Dataset Name</th>
+                                <th>Status</th>
+                                <th>Last Uploaded</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated via app_v2.js -->
+                        </tbody>
+                    </table>
                 </div>
             </section>
         </main>
