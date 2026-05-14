@@ -1321,6 +1321,7 @@ function updateProductDashboard() {
 
             let currentSel = selector.value;
             selector.innerHTML = '<option value="__ALL__">All Products (Total Revenue)</option>';
+            window.lastFilteredProducts = [];
             
             Array.from(productStats.keys()).sort().forEach(sku => {
                 let stats = productStats.get(sku);
@@ -1329,6 +1330,8 @@ function updateProductDashboard() {
                 if (filter && !text.toLowerCase().includes(filter)) return;
                 if (stats.totalRev < minRev || stats.totalRev > maxRev) return;
                 if (stats.totalUnits < minUnits || stats.totalUnits > maxUnits) return;
+                
+                window.lastFilteredProducts.push({ sku, name: stats.name, totalRev: stats.totalRev, totalUnits: stats.totalUnits });
                 
                 let opt = document.createElement('option');
                 opt.value = sku;
@@ -1503,12 +1506,15 @@ function updateCategoryDashboard() {
 
             let currentSel = selector.value;
             selector.innerHTML = '<option value="__ALL__">All Categories (Total Revenue)</option>';
+            window.lastFilteredCategories = [];
             
             Array.from(categoryStats.keys()).sort().forEach(cat => {
                 let stats = categoryStats.get(cat);
                 if (filter && !cat.toLowerCase().includes(filter)) return;
                 if (stats.totalRev < minRev || stats.totalRev > maxRev) return;
                 if (stats.totalUnits < minUnits || stats.totalUnits > maxUnits) return;
+
+                window.lastFilteredCategories.push({ name: cat, totalRev: stats.totalRev, totalUnits: stats.totalUnits });
 
                 let opt = document.createElement('option');
                 opt.value = cat;
@@ -2145,4 +2151,46 @@ function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, f
         }
         fallingTbody.appendChild(tr);
     });
+}
+
+// Export Filtered Products
+function exportFilteredProducts() {
+    if (!window.lastFilteredProducts || window.lastFilteredProducts.length === 0) {
+        alert("No products to export based on current filters.");
+        return;
+    }
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "SKU,Product Name,Total Units Sold,Total Revenue (£)\n";
+    window.lastFilteredProducts.forEach(p => {
+        let name = p.name ? p.name.replace(/"/g, '""') : '';
+        csvContent += `"${p.sku}","${name}",${p.totalUnits},${p.totalRev.toFixed(2)}\n`;
+    });
+    let encodedUri = encodeURI(csvContent);
+    let link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "filtered_products.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Export Filtered Categories
+function exportFilteredCategories() {
+    if (!window.lastFilteredCategories || window.lastFilteredCategories.length === 0) {
+        alert("No categories to export based on current filters.");
+        return;
+    }
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Category Name,Total Units Sold,Total Revenue (£)\n";
+    window.lastFilteredCategories.forEach(c => {
+        let name = c.name ? c.name.replace(/"/g, '""') : '';
+        csvContent += `"${name}",${c.totalUnits},${c.totalRev.toFixed(2)}\n`;
+    });
+    let encodedUri = encodeURI(csvContent);
+    let link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "filtered_categories.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
