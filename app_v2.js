@@ -1307,8 +1307,8 @@ function updateProductDashboard() {
                 productStats.set(d.SKU, { name: d['Product title'], totalRev: 0, totalUnits: 0 });
             }
             let s = productStats.get(d.SKU);
-            s.totalRev += (Number(d.net_total) || 0);
-            s.totalUnits += (Number(d.product_qty) || 0);
+            s.totalRev += (Number(d['N. Revenue']) || 0);
+            s.totalUnits += (Number(d['Units']) || 0);
         });
         
         const populateOptions = () => {
@@ -1487,8 +1487,8 @@ function updateCategoryDashboard() {
                     categoryStats.set(cat, { totalRev: 0, totalUnits: 0 });
                 }
                 let s = categoryStats.get(cat);
-                s.totalRev += (Number(d.net_total) || 0);
-                s.totalUnits += (Number(d.product_qty) || 0);
+                s.totalRev += (Number(d['N. Revenue']) || 0);
+                s.totalUnits += (Number(d['Units']) || 0);
             });
         });
 
