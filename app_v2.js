@@ -987,34 +987,32 @@ async function exportFullReport() {
         section.classList.add('active');
     });
 
-    // Force a reflow
+    // Force a reflow so containers get real dimensions
     document.body.offsetHeight;
 
-    // Force all Chart.js instances to resize and update without animation
-    tabs.forEach(tab => {
-        if (tab.charts) {
-            tab.charts.forEach(c => {
-                if (window[c.id] && typeof window[c.id].resize === 'function') {
-                    window[c.id].resize();
-                }
-            });
-        }
-    });
+    // Re-render ALL dashboards while tabs are visible.
+    // This is critical — Chart.js skips rendering on hidden canvases,
+    // so charts on unvisited tabs were never drawn at all.
+    if (appData.executive) updateExecutiveDashboard();
+    if (appData.customer) updateCustomerDashboard();
+    if (appData.shipping) updateShippingDashboard();
+    if (appData.product) {
+        updateProductDashboard();
+        updateCategoryDashboard();
+    }
+    if (appData.basket) updateBasketDashboard();
+    if (appData.payment) updatePaymentDashboard();
 
-    // Wait for the browser to actually paint the resized canvases
-    await new Promise(r => setTimeout(r, 600));
+    // Wait for Chart.js animation frames to complete painting
+    await new Promise(r => setTimeout(r, 1500));
 
     // Helper: capture a chart canvas as a data URL
     function captureChart(canvasId) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !canvas.getContext) return null;
-        // Skip canvases with no real content (0 width/height)
         if (canvas.width === 0 || canvas.height === 0) return null;
         try {
-            const dataUrl = canvas.toDataURL('image/png');
-            // A blank canvas produces a very short data URL (~100 chars)
-            if (dataUrl.length < 200) return null;
-            return dataUrl;
+            return canvas.toDataURL('image/png');
         } catch (e) {
             return null;
         }
