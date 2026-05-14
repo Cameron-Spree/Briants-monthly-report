@@ -189,8 +189,12 @@
                 <div class="card" style="margin-bottom: 2rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h3 class="product-category-heading" style="margin: 0;">Product Sales Trend <span class="info-tip" title="Line chart showing revenue and units sold for the selected product (or all products) over the date range. Use the dropdown and arrows to cycle through individual products.">?</span></h3>
-                        <div style="display: flex; flex-direction: column; gap: 0.4rem; min-width: 280px;">
-                            <input type="text" id="productSearch" placeholder="Filter dropdown..." style="padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem; min-width: 320px;">
+                            <div style="display: flex; gap: 0.4rem;">
+                                <input type="text" id="productSearch" placeholder="Filter by Name/SKU..." style="flex: 2; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                                <input type="number" id="productMinRev" placeholder="Min £" title="Min Revenue" style="flex: 1; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem; min-width: 60px;">
+                                <input type="number" id="productMinUnits" placeholder="Min Qty" title="Min Units" style="flex: 1; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem; min-width: 60px;">
+                            </div>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 <button id="productPrevBtn" class="nav-arrow-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px; cursor: pointer; border: 1px solid #E2E8F0; border-radius: 4px; background: #fff; font-weight: 700;" title="Previous">&lt;</button>
                                 <select id="productTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; flex-grow: 1;">
@@ -297,12 +301,19 @@
                 <div class="card" style="margin-bottom: 2rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h3 class="product-category-heading" style="margin: 0;">Category Sales Trend <span class="info-tip" title="Line chart showing revenue and units sold for the selected category (or all categories) over the date range. Products are attributed to categories via the hierarchy CSV.">?</span></h3>
-                        <div style="display: flex; gap: 0.5rem; align-items: center; min-width: 280px;">
-                            <button id="categoryPrevBtn" class="nav-arrow-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px; cursor: pointer; border: 1px solid #E2E8F0; border-radius: 4px; background: #fff; font-weight: 700;" title="Previous">&lt;</button>
-                            <select id="categoryTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; flex-grow: 1;">
-                                <option value="__ALL__">All Categories (Total Revenue)</option>
-                            </select>
-                            <button id="categoryNextBtn" class="nav-arrow-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px; cursor: pointer; border: 1px solid #E2E8F0; border-radius: 4px; background: #fff; font-weight: 700;" title="Next">&gt;</button>
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem; min-width: 320px;">
+                            <div style="display: flex; gap: 0.4rem;">
+                                <input type="text" id="categorySearch" placeholder="Filter by Name..." style="flex: 2; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
+                                <input type="number" id="categoryMinRev" placeholder="Min £" title="Min Revenue" style="flex: 1; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem; min-width: 60px;">
+                                <input type="number" id="categoryMinUnits" placeholder="Min Qty" title="Min Units" style="flex: 1; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem; min-width: 60px;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <button id="categoryPrevBtn" class="nav-arrow-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px; cursor: pointer; border: 1px solid #E2E8F0; border-radius: 4px; background: #fff; font-weight: 700;" title="Previous">&lt;</button>
+                                <select id="categoryTrendSelector" style="padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; flex-grow: 1;">
+                                    <option value="__ALL__">All Categories (Total Revenue)</option>
+                                </select>
+                                <button id="categoryNextBtn" class="nav-arrow-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px; cursor: pointer; border: 1px solid #E2E8F0; border-radius: 4px; background: #fff; font-weight: 700;" title="Next">&gt;</button>
+                            </div>
                         </div>
                     </div>
                     <div class="trend-summary-grid" id="categoryTrendSummary">

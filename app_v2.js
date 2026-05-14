@@ -1294,36 +1294,53 @@ function updateProductDashboard() {
     // Product trend chart (All Products or single SKU)
     let selector = document.getElementById('productTrendSelector');
     let searchInput = document.getElementById('productSearch');
+    const minRevInput = document.getElementById('productMinRev');
+    const minUnitsInput = document.getElementById('productMinUnits');
     
     if (selector && searchInput) {
-        let uniqueProducts = new Map();
-        data.forEach(d => { if (d.SKU && !uniqueProducts.has(d.SKU)) uniqueProducts.set(d.SKU, d['Product title']); });
+        let productStats = new Map(); // sku -> { name, totalRev, totalUnits }
+        data.forEach(d => {
+            if (!d.SKU) return;
+            if (!productStats.has(d.SKU)) {
+                productStats.set(d.SKU, { name: d['Product title'], totalRev: 0, totalUnits: 0 });
+            }
+            let s = productStats.get(d.SKU);
+            s.totalRev += (Number(d.net_total) || 0);
+            s.totalUnits += (Number(d.product_qty) || 0);
+        });
         
-        const populateOptions = (filter = "") => {
+        const populateOptions = () => {
+            let filter = searchInput.value.toLowerCase();
+            let minRev = parseFloat(minRevInput.value) || 0;
+            let minUnits = parseFloat(minUnitsInput.value) || 0;
+
             let currentSel = selector.value;
             selector.innerHTML = '<option value="__ALL__">All Products (Total Revenue)</option>';
-            Array.from(uniqueProducts.keys()).sort().forEach(sku => {
-                let name = uniqueProducts.get(sku);
-                let text = '[' + sku + '] ' + name;
-                if (filter && !text.toLowerCase().includes(filter.toLowerCase())) return;
+            
+            Array.from(productStats.keys()).sort().forEach(sku => {
+                let stats = productStats.get(sku);
+                let text = '[' + sku + '] ' + stats.name;
+                
+                if (filter && !text.toLowerCase().includes(filter)) return;
+                if (stats.totalRev < minRev) return;
+                if (stats.totalUnits < minUnits) return;
                 
                 let opt = document.createElement('option');
                 opt.value = sku;
                 opt.textContent = text;
                 selector.appendChild(opt);
             });
-            if (currentSel && (currentSel === '__ALL__' || uniqueProducts.has(currentSel))) {
-                selector.value = currentSel;
-            }
+            if (currentSel && (currentSel === '__ALL__' || selector.querySelector(`option[value="${currentSel}"]`))) selector.value = currentSel;
+            else selector.value = "__ALL__";
         };
 
         if (!selector.dataset.initialized) {
             selector.dataset.initialized = "true";
             populateOptions();
             
-            searchInput.oninput = () => {
-                populateOptions(searchInput.value);
-            };
+            searchInput.oninput = populateOptions;
+            if (minRevInput) minRevInput.oninput = populateOptions;
+            if (minUnitsInput) minUnitsInput.oninput = populateOptions;
 
             selector.onchange = () => {
                 renderProductTrendChart(selector.value, data, months);
@@ -1346,10 +1363,7 @@ function updateProductDashboard() {
                 };
             }
         } else {
-            // If already initialized, just make sure we have the latest chart
-            // But don't repopulate the whole list unless search is empty or we really need to
-            // Actually, populateOptions handles preserving the selection, so it's safe to call
-            populateOptions(searchInput.value);
+            populateOptions();
         }
         
         renderProductTrendChart(selector.value, data, months);
@@ -1453,26 +1467,54 @@ function updateCategoryDashboard() {
 
     // Category trend chart
     let selector = document.getElementById('categoryTrendSelector');
-    if (selector) {
-        let uniqueCategories = new Set();
-        data.forEach(d => {
-            getCategoryNames(d).forEach(cat => uniqueCategories.add(cat));
-        });
-        
-        let currentSel = selector.value;
-        selector.innerHTML = '<option value="__ALL__">All Categories (Total Revenue)</option>';
-        Array.from(uniqueCategories).sort().forEach(cat => {
-            let opt = document.createElement('option');
-            opt.value = cat;
-            opt.textContent = cat;
-            selector.appendChild(opt);
-        });
-        if (currentSel && (currentSel === '__ALL__' || uniqueCategories.has(currentSel))) selector.value = currentSel;
-        
-        renderCategoryTrendChart(selector.value, data, months);
+    let searchInput = document.getElementById('categorySearch');
+    const minRevInput = document.getElementById('categoryMinRev');
+    const minUnitsInput = document.getElementById('categoryMinUnits');
 
-        if (!selector.dataset.arrowsInitialized) {
-            selector.dataset.arrowsInitialized = "true";
+    if (selector && searchInput) {
+        let categoryStats = new Map(); // catName -> { totalRev, totalUnits }
+        data.forEach(d => {
+            getCategoryNames(d).forEach(cat => {
+                if (!categoryStats.has(cat)) {
+                    categoryStats.set(cat, { totalRev: 0, totalUnits: 0 });
+                }
+                let s = categoryStats.get(cat);
+                s.totalRev += (Number(d.net_total) || 0);
+                s.totalUnits += (Number(d.product_qty) || 0);
+            });
+        });
+
+        const populateOptions = () => {
+            let filter = searchInput.value.toLowerCase();
+            let minRev = parseFloat(minRevInput.value) || 0;
+            let minUnits = parseFloat(minUnitsInput.value) || 0;
+
+            let currentSel = selector.value;
+            selector.innerHTML = '<option value="__ALL__">All Categories (Total Revenue)</option>';
+            
+            Array.from(categoryStats.keys()).sort().forEach(cat => {
+                let stats = categoryStats.get(cat);
+                if (filter && !cat.toLowerCase().includes(filter)) return;
+                if (stats.totalRev < minRev) return;
+                if (stats.totalUnits < minUnits) return;
+
+                let opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                selector.appendChild(opt);
+            });
+            if (currentSel && (currentSel === '__ALL__' || selector.querySelector(`option[value="${currentSel}"]`))) selector.value = currentSel;
+            else selector.value = "__ALL__";
+        };
+
+        if (!selector.dataset.initialized) {
+            selector.dataset.initialized = "true";
+            populateOptions();
+            
+            searchInput.oninput = populateOptions;
+            if (minRevInput) minRevInput.oninput = populateOptions;
+            if (minUnitsInput) minUnitsInput.oninput = populateOptions;
+
             selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
 
             let prevBtn = document.getElementById('categoryPrevBtn');
@@ -1492,8 +1534,9 @@ function updateCategoryDashboard() {
                 };
             }
         } else {
-            selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
+            populateOptions();
         }
+        renderCategoryTrendChart(selector.value, data, months);
     }
 
     renderCategoryTable('categoryTableA', categoryTableMonthA, data, categorySortA);
@@ -2089,4 +2132,3 @@ function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, f
         fallingTbody.appendChild(tr);
     });
 }
-
