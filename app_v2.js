@@ -862,6 +862,274 @@ function deleteDataset(key) {
     if (statusText) statusText.textContent = 'Dataset deleted.';
 }
 
+// ===== FULL REPORT EXPORT =====
+function exportFullReport() {
+    // Tab definitions with charts and tables
+    const tabs = [
+        {
+            id: 'tab-executive', name: 'Executive Summary',
+            kpis: [
+                { label: 'Total Revenue', id: 'kpi-revenue', trendId: 'kpi-revenue-trend' },
+                { label: 'Total Orders', id: 'kpi-orders', trendId: 'kpi-orders-trend' },
+                { label: 'AOV', id: 'kpi-aov', trendId: 'kpi-aov-trend' }
+            ],
+            charts: [
+                { id: 'executiveTrendChart', title: 'Revenue & Orders Trend' }
+            ],
+            tables: []
+        },
+        {
+            id: 'tab-customer', name: 'Customer Split',
+            kpis: [],
+            charts: [
+                { id: 'repeatNewOrdersChart', title: 'New vs Repeat Orders' },
+                { id: 'customerRevenueChart', title: 'Revenue by Customer Type' },
+                { id: 'customerTrendChart', title: 'Customer Trend Over Time' },
+                { id: 'customerAovChart', title: 'AOV Comparison' }
+            ],
+            tables: []
+        },
+        {
+            id: 'tab-shipping', name: 'Shipping & Delivery',
+            kpis: [],
+            charts: [
+                { id: 'shippingTrendChart', title: 'Shipping Volume Trend' },
+                { id: 'fulfillmentVolumeChart', title: 'Fulfillment Methods (Volume)' },
+                { id: 'fulfillmentRevenueChart', title: 'Shipping Revenue Collected' },
+                { id: 'orderRevenueByMethodChart', title: 'Total Order Revenue by Method' }
+            ],
+            tables: []
+        },
+        {
+            id: 'tab-product', name: 'Product Performance',
+            kpis: [],
+            summaryCards: [
+                { label: 'Total Revenue', id: 'productTrendTotalRevenue' },
+                { label: 'Avg Monthly Revenue', id: 'productTrendAvgRevenue' },
+                { label: 'Total Units Sold', id: 'productTrendTotalUnits' },
+                { label: 'Avg Units Per Month', id: 'productTrendAvgUnits' }
+            ],
+            charts: [
+                { id: 'productTrendChart', title: 'Product Sales Trend' }
+            ],
+            tables: [
+                { id: 'productTableA', title: 'Top Performers (Month A)' },
+                { id: 'productTableB', title: 'Top Performers (Month B)' },
+                { id: 'productRisingStars', title: 'Rising Stars (Biggest £ Gains)' },
+                { id: 'productFallingStars', title: 'Falling Stars (Biggest £ Drops)' }
+            ]
+        },
+        {
+            id: 'tab-category', name: 'Category Performance',
+            kpis: [],
+            summaryCards: [
+                { label: 'Total Revenue', id: 'categoryTrendTotalRevenue' },
+                { label: 'Avg Monthly Revenue', id: 'categoryTrendAvgRevenue' },
+                { label: 'Total Units Sold', id: 'categoryTrendTotalUnits' },
+                { label: 'Avg Units Per Month', id: 'categoryTrendAvgUnits' }
+            ],
+            charts: [
+                { id: 'categoryTrendChart', title: 'Category Sales Trend' }
+            ],
+            tables: [
+                { id: 'categoryTableA', title: 'Top Categories (Month A)' },
+                { id: 'categoryTableB', title: 'Top Categories (Month B)' },
+                { id: 'categoryRisingStars', title: 'Rising Stars (Biggest £ Gains)' },
+                { id: 'categoryFallingStars', title: 'Falling Stars (Biggest £ Drops)' }
+            ]
+        },
+        {
+            id: 'tab-basket', name: 'Basket Analysis',
+            kpis: [],
+            inlineMetrics: [
+                { label: 'Project AOV', id: 'projectAovMetric' },
+                { label: 'Maintenance AOV', id: 'maintenanceAovMetric' }
+            ],
+            charts: [
+                { id: 'basketTopPairsChart', title: 'Top 10 Most Paired Products' },
+                { id: 'basketDistChart', title: 'Pair Frequency Distribution' },
+                { id: 'basketProjectSplitChart', title: 'Project vs. Maintenance Baskets' },
+                { id: 'crossCategoryGauge', title: 'Cross-Category Penetration Rate' },
+                { id: 'aovMultipliersChart', title: 'Top AOV Multipliers' }
+            ],
+            tables: [
+                { id: 'consumableVelocityTable', title: 'Consumable Reorder Rates' },
+                { id: 'basketTable', title: 'Product Pairings' }
+            ]
+        },
+        {
+            id: 'tab-payment', name: 'Payment Methods',
+            kpis: [],
+            charts: [
+                { id: 'paymentTrendChart', title: 'Payment Revenue Trend' },
+                { id: 'paymentPieChart', title: 'Revenue Split (Month A)' },
+                { id: 'paymentPieChartB', title: 'Revenue Split (Month B)' }
+            ],
+            tables: [
+                { id: 'paymentHistoryTable', title: 'Gateway Comparison' }
+            ]
+        }
+    ];
+
+    // Helper: capture a chart canvas as a data URL
+    function captureChart(canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !canvas.getContext) return null;
+        try {
+            return canvas.toDataURL('image/png');
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Helper: extract a table as an HTML string
+    function captureTable(tableId) {
+        const table = document.getElementById(tableId);
+        if (!table) return null;
+        const clone = table.cloneNode(true);
+        // Strip sort arrows from headers for cleanliness
+        clone.querySelectorAll('th').forEach(th => {
+            th.removeAttribute('data-sort');
+            th.removeAttribute('style');
+        });
+        return clone.outerHTML;
+    }
+
+    // Build the report
+    const dateFrom = document.getElementById('globalDateFrom')?.value || '';
+    const dateTo = document.getElementById('globalDateTo')?.value || '';
+    const now = new Date().toLocaleString();
+
+    let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Briants Monthly Report - Export ${now}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; color: #373737; background: #fff; padding: 2rem; max-width: 1200px; margin: 0 auto; line-height: 1.5; }
+h1 { font-size: 2rem; color: #009640; margin-bottom: 0.5rem; }
+.meta { color: #64748B; font-size: 0.9rem; margin-bottom: 2rem; border-bottom: 2px solid #E2E8F0; padding-bottom: 1rem; }
+.tab-section { margin-bottom: 3rem; page-break-inside: avoid; }
+.tab-title { font-size: 1.5rem; color: #fff; background: #009640; padding: 0.75rem 1.25rem; border-radius: 6px; margin-bottom: 1.5rem; }
+.kpi-row { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.kpi-box { flex: 1; min-width: 180px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem; text-align: center; border-top: 3px solid #009640; }
+.kpi-label { font-size: 0.8rem; color: #64748B; text-transform: uppercase; font-weight: 600; }
+.kpi-val { font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0; }
+.kpi-trend { font-size: 0.85rem; }
+.chart-block { margin-bottom: 1.5rem; }
+.chart-block h4 { margin-bottom: 0.5rem; color: #475569; }
+.chart-block img { max-width: 100%; border: 1px solid #E2E8F0; border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #E2E8F0; font-size: 0.85rem; }
+th { background: #F8FAFC; font-weight: 600; color: #475569; }
+tr:nth-child(even) td { background: #FAFBFC; }
+.table-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: #373737; }
+.summary-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.summary-card { flex: 1; min-width: 140px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 0.75rem; }
+.summary-card .label { font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; }
+.summary-card .value { font-size: 1.1rem; font-weight: 700; }
+.no-data { color: #94A3B8; font-style: italic; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<h1>Briants Monthly Report Dashboard</h1>
+<div class="meta">
+    <strong>Date Range:</strong> ${dateFrom || 'N/A'} to ${dateTo || 'N/A'} &nbsp;|&nbsp; 
+    <strong>Exported:</strong> ${now}
+</div>
+`;
+
+    tabs.forEach(tab => {
+        html += `<div class="tab-section">
+<h2 class="tab-title">${tab.name}</h2>\n`;
+
+        // KPIs
+        if (tab.kpis && tab.kpis.length > 0) {
+            html += `<div class="kpi-row">\n`;
+            tab.kpis.forEach(k => {
+                const valEl = document.getElementById(k.id);
+                const trendEl = k.trendId ? document.getElementById(k.trendId) : null;
+                html += `<div class="kpi-box">
+    <div class="kpi-label">${k.label}</div>
+    <div class="kpi-val">${valEl ? valEl.textContent : '--'}</div>
+    ${trendEl ? `<div class="kpi-trend">${trendEl.textContent}</div>` : ''}
+</div>\n`;
+            });
+            html += `</div>\n`;
+        }
+
+        // Summary cards (product/category trend summaries)
+        if (tab.summaryCards && tab.summaryCards.length > 0) {
+            html += `<div class="summary-row">\n`;
+            tab.summaryCards.forEach(sc => {
+                const el = document.getElementById(sc.id);
+                html += `<div class="summary-card">
+    <div class="label">${sc.label}</div>
+    <div class="value">${el ? el.textContent : '--'}</div>
+</div>\n`;
+            });
+            html += `</div>\n`;
+        }
+
+        // Inline metrics (basket AOVs)
+        if (tab.inlineMetrics && tab.inlineMetrics.length > 0) {
+            html += `<div class="kpi-row">\n`;
+            tab.inlineMetrics.forEach(m => {
+                const el = document.getElementById(m.id);
+                html += `<div class="kpi-box">
+    <div class="kpi-label">${m.label}</div>
+    <div class="kpi-val">${el ? el.textContent : '--'}</div>
+</div>\n`;
+            });
+            html += `</div>\n`;
+        }
+
+        // Charts
+        if (tab.charts) {
+            tab.charts.forEach(c => {
+                const dataUrl = captureChart(c.id);
+                if (dataUrl) {
+                    html += `<div class="chart-block">
+    <h4>${c.title}</h4>
+    <img src="${dataUrl}" alt="${c.title}" />
+</div>\n`;
+                }
+            });
+        }
+
+        // Tables
+        if (tab.tables) {
+            tab.tables.forEach(t => {
+                const tableHtml = captureTable(t.id);
+                if (tableHtml) {
+                    const table = document.getElementById(t.id);
+                    const rows = table ? table.querySelectorAll('tbody tr') : [];
+                    if (rows.length > 0) {
+                        html += `<div class="table-title">${t.title}</div>\n`;
+                        html += tableHtml + '\n';
+                    }
+                }
+            });
+        }
+
+        html += `</div>\n`;
+    });
+
+    html += `</body></html>`;
+
+    // Download
+    const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Briants_Report_${dateFrom}_to_${dateTo}_${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 function updateTrendElement(id, value, suffix) {
     const el = document.getElementById(id);
     if (!el) return;
