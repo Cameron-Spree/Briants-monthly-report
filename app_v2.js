@@ -11,6 +11,7 @@ let appData = {
     basketConsumables: null,
     basketAnchors: null,
     basketCrossCategory: null,
+    activityLog: {},
     uploadMeta: {}
 };
 let dateRangeFrom = "";
@@ -40,6 +41,9 @@ let categoryHierarchyLookupCache = { source: null, byName: null };
 
 // Register ChartJS datalabels plugin
 Chart.register(ChartDataLabels);
+if (window['chartjs-plugin-annotation']) {
+    Chart.register(window['chartjs-plugin-annotation']);
+}
 Chart.defaults.set('plugins.datalabels', {
     display: function(context) {
         return context.dataset.data[context.dataIndex] > 0;
@@ -799,6 +803,7 @@ function updateDashboards() {
     }
     if (appData.basket) updateBasketDashboard();
     if (appData.payment) updatePaymentDashboard();
+    updateActivityDashboard();
     updateDataStatusTab();
     saveAppDataToDB();
 }
@@ -860,6 +865,117 @@ function deleteDataset(key) {
     // Clear status text
     const statusText = document.getElementById('uploadStatus');
     if (statusText) statusText.textContent = 'Dataset deleted.';
+}
+
+// ===== ACTIVITY LOG =====
+function updateActivityDashboard() {
+    const tbody = document.querySelector('#activityLogTable tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    const notes = appData.activityLog || {};
+    const months = Object.keys(notes).sort().reverse();
+    
+    if (months.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #64748B; font-style: italic;">No notes recorded yet.</td></tr>';
+        return;
+    }
+
+    months.forEach(month => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight: 600;">${month}</td>
+            <td style="white-space: pre-wrap;">${notes[month]}</td>
+            <td style="text-align: right;">
+                <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.5rem;" onclick="editActivityNote('${month}')">Edit</button>
+                <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-color: #EF4444; color: #EF4444;" onclick="deleteActivityNote('${month}')">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function saveActivityNote() {
+    const monthInput = document.getElementById('activityNoteMonth');
+    const textInput = document.getElementById('activityNoteText');
+    if (!monthInput || !textInput) return;
+    
+    const month = monthInput.value;
+    const text = textInput.value.trim();
+    
+    if (!month) { alert("Please select a target month."); return; }
+    if (!text) { alert("Please enter some text for the note."); return; }
+    
+    if (!appData.activityLog) appData.activityLog = {};
+    appData.activityLog[month] = text;
+    
+    monthInput.value = '';
+    textInput.value = '';
+    
+    updateDashboards();
+}
+
+function editActivityNote(month) {
+    const monthInput = document.getElementById('activityNoteMonth');
+    const textInput = document.getElementById('activityNoteText');
+    if (!monthInput || !textInput || !appData.activityLog || !appData.activityLog[month]) return;
+    
+    monthInput.value = month;
+    textInput.value = appData.activityLog[month];
+    document.getElementById('tab-activity').scrollIntoView({ behavior: 'smooth' });
+}
+
+function deleteActivityNote(month) {
+    if (!confirm('Are you sure you want to delete the note for ' + month + '?')) return;
+    if (appData.activityLog && appData.activityLog[month]) {
+        delete appData.activityLog[month];
+        updateDashboards();
+    }
+}
+
+function getChartAnnotationsConfigs(labels) {
+    if (!appData.activityLog || Object.keys(appData.activityLog).length === 0) return {};
+    
+    const annotations = {};
+    labels.forEach((label, index) => {
+        // label might be 'Jan 24', let's match to '2024-01'
+        const parts = label.split(' ');
+        if (parts.length !== 2) return;
+        const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const mIdx = monthNames.indexOf(parts[0]);
+        if (mIdx === -1) return;
+        const yearStr = '20' + parts[1];
+        const monthStr = (mIdx + 1).toString().padStart(2, '0');
+        const ym = yearStr + '-' + monthStr;
+        
+        if (appData.activityLog[ym]) {
+            annotations['note' + index] = {
+                type: 'point',
+                xValue: label,
+                yValue: 0, // bottom of the chart
+                backgroundColor: '#8B5CF6',
+                radius: 6,
+                borderWidth: 2,
+                borderColor: '#fff',
+                label: {
+                    content: appData.activityLog[ym].length > 40 ? appData.activityLog[ym].substring(0, 40) + '...' : appData.activityLog[ym],
+                    display: false,
+                    position: 'top',
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    color: '#fff',
+                    font: { size: 12 }
+                },
+                enter({element}, event) { element.options.label.display = true; return true; },
+                leave({element}, event) { element.options.label.display = false; return true; }
+            };
+        }
+    });
+    
+    return {
+        annotation: {
+            annotations: annotations
+        }
+    };
 }
 
 // ===== FULL REPORT EXPORT =====
@@ -1725,6 +1841,19 @@ function renderLineChart(canvasId, labels, dataObj) {
     var canvas = document.getElementById(canvasId);
     if (!canvas) return;
     if (window[canvasId] instanceof Chart) window[canvasId].destroy();
+    
+    let pluginsConfig = { 
+        datalabels: { 
+            display: function(ctx) { return ctx.dataIndex % 2 === 0 && ctx.dataset.data[ctx.dataIndex] > 0; },
+            formatter: (v) => Math.round(v).toLocaleString() 
+        } 
+    };
+    
+    const annotationConfig = getChartAnnotationsConfigs(labels);
+    if (annotationConfig.annotation) {
+        pluginsConfig.annotation = annotationConfig.annotation;
+    }
+    
     window[canvasId] = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: { labels: labels, datasets: [{
@@ -1732,9 +1861,10 @@ function renderLineChart(canvasId, labels, dataObj) {
             borderColor: dataObj.color || '#009640', backgroundColor: 'rgba(0,150,64,0.1)',
             fill: true, tension: 0.3, borderWidth: 2, pointBackgroundColor: dataObj.color || '#009640'
         }] },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } },
-            plugins: { datalabels: { display: function(ctx) { return ctx.dataIndex % 2 === 0 && ctx.dataset.data[ctx.dataIndex] > 0; },
-                formatter: (v) => Math.round(v).toLocaleString() } } }
+        options: { 
+            responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } },
+            plugins: pluginsConfig 
+        }
     });
 }
 
@@ -1748,9 +1878,17 @@ function renderMultiLineChart(canvasId, labels, datasets) {
         tension: 0.3, borderWidth: 2, pointBackgroundColor: ds.color,
         yAxisID: ds.yAxisID || 'y'
     }));
+    
+    let pluginsConfig = { datalabels: { display: false } };
+    const annotationConfig = getChartAnnotationsConfigs(labels);
+    if (annotationConfig.annotation) {
+        pluginsConfig.annotation = annotationConfig.annotation;
+    }
+    
     let opts = { responsive: true, maintainAspectRatio: false,
         scales: { y: { beginAtZero: true, position: 'left' } },
-        plugins: { datalabels: { display: false } } };
+        plugins: pluginsConfig 
+    };
     if (datasets.some(ds => ds.yAxisID === 'y1')) {
         opts.scales.y1 = { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } };
     }

@@ -49,6 +49,7 @@
                 <button class="tab-btn" data-target="tab-categories">Categories</button>
                 <button class="tab-btn" data-target="tab-basket">Basket Analysis</button>
                 <button class="tab-btn" data-target="tab-payment">Payment Methods</button>
+                <button class="tab-btn" data-target="tab-activity">Activity Log</button>
                 <button class="tab-btn" data-target="tab-sql">SQL Developer Hub</button>
                 <button class="tab-btn" data-target="tab-data" style="margin-top: auto; border-top: 1px solid #E2E8F0; padding-top: 1rem; color: #64748B;">Data Management</button>
             </nav>
@@ -572,6 +573,48 @@
                 </div>
             </section>
 
+            <!-- Activity Log -->
+            <section id="tab-activity" class="tab-content">
+                <h2 class="section-title">Activity Log</h2>
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-top: 0;">Add / Edit Note</h3>
+                    <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 1rem;">
+                        Record actions, marketing changes, or website updates for a specific month. These notes will appear as interactive dots on your trend charts to help correlate activities with performance changes.
+                    </p>
+                    <div style="display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="activityNoteMonth" style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; color: #373737;">Target Month</label>
+                            <input type="month" id="activityNoteMonth" style="width: 100%; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit;">
+                        </div>
+                        <div style="flex: 3; min-width: 300px;">
+                            <label for="activityNoteText" style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; color: #373737;">Note Content</label>
+                            <textarea id="activityNoteText" rows="3" placeholder="E.g., Launched new Google Ads campaign for Garden Furniture..." style="width: 100%; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; text-align: right;">
+                        <button class="btn-primary" onclick="saveActivityNote()" style="padding: 0.5rem 1.5rem;">Save Note</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-top: 0;">Existing Notes</h3>
+                    <div class="table-container" style="max-height: 500px; overflow-y: auto;">
+                        <table class="data-table" id="activityLogTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 120px;">Month</th>
+                                    <th>Note Content</th>
+                                    <th style="width: 100px; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- SQL Developer Hub -->
             <section id="tab-sql" class="tab-content">
                 <h2 class="section-title">SQL Developer Hub</h2>
@@ -617,6 +660,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <!-- CodeMirror Core and Modes -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
