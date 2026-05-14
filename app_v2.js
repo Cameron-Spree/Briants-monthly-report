@@ -409,7 +409,7 @@ ORDER BY \`Reporting Month\` DESC;`
 
 // Initialize the Application
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log("App Initialized v1.4.0");
+    console.log("App Initialized v1.5.0");
     initTabs();
     initFileUpload();
     initSqlRepository();
@@ -1295,7 +1295,9 @@ function updateProductDashboard() {
     let selector = document.getElementById('productTrendSelector');
     let searchInput = document.getElementById('productSearch');
     const minRevInput = document.getElementById('productMinRev');
+    const maxRevInput = document.getElementById('productMaxRev');
     const minUnitsInput = document.getElementById('productMinUnits');
+    const maxUnitsInput = document.getElementById('productMaxUnits');
     
     if (selector && searchInput) {
         let productStats = new Map(); // sku -> { name, totalRev, totalUnits }
@@ -1312,7 +1314,9 @@ function updateProductDashboard() {
         const populateOptions = () => {
             let filter = searchInput.value.toLowerCase();
             let minRev = parseFloat(minRevInput.value) || 0;
+            let maxRev = parseFloat(maxRevInput.value) || Infinity;
             let minUnits = parseFloat(minUnitsInput.value) || 0;
+            let maxUnits = parseFloat(maxUnitsInput.value) || Infinity;
 
             let currentSel = selector.value;
             selector.innerHTML = '<option value="__ALL__">All Products (Total Revenue)</option>';
@@ -1322,8 +1326,8 @@ function updateProductDashboard() {
                 let text = '[' + sku + '] ' + stats.name;
                 
                 if (filter && !text.toLowerCase().includes(filter)) return;
-                if (stats.totalRev < minRev) return;
-                if (stats.totalUnits < minUnits) return;
+                if (stats.totalRev < minRev || stats.totalRev > maxRev) return;
+                if (stats.totalUnits < minUnits || stats.totalUnits > maxUnits) return;
                 
                 let opt = document.createElement('option');
                 opt.value = sku;
@@ -1340,7 +1344,9 @@ function updateProductDashboard() {
             
             searchInput.oninput = populateOptions;
             if (minRevInput) minRevInput.oninput = populateOptions;
+            if (maxRevInput) maxRevInput.oninput = populateOptions;
             if (minUnitsInput) minUnitsInput.oninput = populateOptions;
+            if (maxUnitsInput) maxUnitsInput.oninput = populateOptions;
 
             selector.onchange = () => {
                 renderProductTrendChart(selector.value, data, months);
@@ -1469,7 +1475,9 @@ function updateCategoryDashboard() {
     let selector = document.getElementById('categoryTrendSelector');
     let searchInput = document.getElementById('categorySearch');
     const minRevInput = document.getElementById('categoryMinRev');
+    const maxRevInput = document.getElementById('categoryMaxRev');
     const minUnitsInput = document.getElementById('categoryMinUnits');
+    const maxUnitsInput = document.getElementById('categoryMaxUnits');
 
     if (selector && searchInput) {
         let categoryStats = new Map(); // catName -> { totalRev, totalUnits }
@@ -1487,7 +1495,9 @@ function updateCategoryDashboard() {
         const populateOptions = () => {
             let filter = searchInput.value.toLowerCase();
             let minRev = parseFloat(minRevInput.value) || 0;
+            let maxRev = parseFloat(maxRevInput.value) || Infinity;
             let minUnits = parseFloat(minUnitsInput.value) || 0;
+            let maxUnits = parseFloat(maxUnitsInput.value) || Infinity;
 
             let currentSel = selector.value;
             selector.innerHTML = '<option value="__ALL__">All Categories (Total Revenue)</option>';
@@ -1495,8 +1505,8 @@ function updateCategoryDashboard() {
             Array.from(categoryStats.keys()).sort().forEach(cat => {
                 let stats = categoryStats.get(cat);
                 if (filter && !cat.toLowerCase().includes(filter)) return;
-                if (stats.totalRev < minRev) return;
-                if (stats.totalUnits < minUnits) return;
+                if (stats.totalRev < minRev || stats.totalRev > maxRev) return;
+                if (stats.totalUnits < minUnits || stats.totalUnits > maxUnits) return;
 
                 let opt = document.createElement('option');
                 opt.value = cat;
@@ -1513,7 +1523,9 @@ function updateCategoryDashboard() {
             
             searchInput.oninput = populateOptions;
             if (minRevInput) minRevInput.oninput = populateOptions;
+            if (maxRevInput) maxRevInput.oninput = populateOptions;
             if (minUnitsInput) minUnitsInput.oninput = populateOptions;
+            if (maxUnitsInput) maxUnitsInput.oninput = populateOptions;
 
             selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
 
