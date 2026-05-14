@@ -971,12 +971,29 @@ function exportFullReport() {
         }
     ];
 
+    // Temporarily show ALL tab sections so canvases have real dimensions
+    const allSections = document.querySelectorAll('.tab-content');
+    const originalDisplay = [];
+    allSections.forEach(section => {
+        originalDisplay.push(section.style.display);
+        section.style.display = 'block';
+        section.classList.add('active');
+    });
+
+    // Force a reflow so canvases resize
+    document.body.offsetHeight;
+
     // Helper: capture a chart canvas as a data URL
     function captureChart(canvasId) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !canvas.getContext) return null;
+        // Skip canvases with no real content (0 width/height)
+        if (canvas.width === 0 || canvas.height === 0) return null;
         try {
-            return canvas.toDataURL('image/png');
+            const dataUrl = canvas.toDataURL('image/png');
+            // A blank canvas produces a very short data URL (~100 chars)
+            if (dataUrl.length < 200) return null;
+            return dataUrl;
         } catch (e) {
             return null;
         }
@@ -1128,6 +1145,19 @@ tr:nth-child(even) td { background: #FAFBFC; }
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    // Restore original tab visibility
+    allSections.forEach((section, i) => {
+        section.style.display = originalDisplay[i];
+        section.classList.remove('active');
+    });
+    // Re-activate whichever tab was originally active
+    const activeBtn = document.querySelector('.tab-btn.active');
+    if (activeBtn) {
+        const targetId = activeBtn.getAttribute('data-target');
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) targetEl.classList.add('active');
+    }
 }
 
 function updateTrendElement(id, value, suffix) {
