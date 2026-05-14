@@ -863,7 +863,14 @@ function deleteDataset(key) {
 }
 
 // ===== FULL REPORT EXPORT =====
-function exportFullReport() {
+async function exportFullReport() {
+    const exportBtn = document.querySelector('button[onclick="exportFullReport()"]');
+    const originalBtnText = exportBtn ? exportBtn.innerHTML : '📋 Export Report';
+    if (exportBtn) {
+        exportBtn.innerHTML = '⏳ Exporting...';
+        exportBtn.disabled = true;
+    }
+
     // Tab definitions with charts and tables
     const tabs = [
         {
@@ -980,8 +987,22 @@ function exportFullReport() {
         section.classList.add('active');
     });
 
-    // Force a reflow so canvases resize
+    // Force a reflow
     document.body.offsetHeight;
+
+    // Force all Chart.js instances to resize and update without animation
+    tabs.forEach(tab => {
+        if (tab.charts) {
+            tab.charts.forEach(c => {
+                if (window[c.id] && typeof window[c.id].resize === 'function') {
+                    window[c.id].resize();
+                }
+            });
+        }
+    });
+
+    // Wait for the browser to actually paint the resized canvases
+    await new Promise(r => setTimeout(r, 600));
 
     // Helper: capture a chart canvas as a data URL
     function captureChart(canvasId) {
@@ -1157,6 +1178,11 @@ tr:nth-child(even) td { background: #FAFBFC; }
         const targetId = activeBtn.getAttribute('data-target');
         const targetEl = document.getElementById(targetId);
         if (targetEl) targetEl.classList.add('active');
+    }
+
+    if (exportBtn) {
+        exportBtn.innerHTML = originalBtnText;
+        exportBtn.disabled = false;
     }
 }
 
