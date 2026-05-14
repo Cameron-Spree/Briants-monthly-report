@@ -958,15 +958,41 @@ function getChartAnnotationsConfigs(labels) {
                 borderWidth: 2,
                 borderColor: '#fff',
                 label: {
-                    content: appData.activityLog[ym].length > 40 ? appData.activityLog[ym].substring(0, 40) + '...' : appData.activityLog[ym],
+                    content: 'Note', // Default shortened
                     display: false,
                     position: 'top',
                     backgroundColor: 'rgba(0,0,0,0.8)',
                     color: '#fff',
-                    font: { size: 12 }
+                    font: { size: 12 },
+                    padding: 8
                 },
-                enter({element}, event) { element.options.label.display = true; return true; },
-                leave({element}, event) { element.options.label.display = false; return true; }
+                click({element}, event) {
+                    const isOpen = element.options.label.display;
+                    element.options.label.display = !isOpen;
+                    if (!isOpen) {
+                        // Word wrap the full text
+                        const words = appData.activityLog[ym].split(' ');
+                        const lines = [];
+                        let currentLine = '';
+                        words.forEach(w => {
+                            if ((currentLine + w).length > 40) {
+                                lines.push(currentLine.trim());
+                                currentLine = w + ' ';
+                            } else {
+                                currentLine += w + ' ';
+                            }
+                        });
+                        lines.push(currentLine.trim());
+                        element.options.label.content = lines;
+                    }
+                    return true;
+                },
+                enter({element}, event) { 
+                    document.body.style.cursor = 'pointer'; 
+                },
+                leave({element}, event) { 
+                    document.body.style.cursor = 'default';
+                }
             };
         }
     });
