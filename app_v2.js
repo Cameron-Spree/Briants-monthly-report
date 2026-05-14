@@ -1303,6 +1303,7 @@ function updateProductDashboard() {
         let productStats = new Map(); // sku -> { name, totalRev, totalUnits }
         data.forEach(d => {
             if (!d.SKU) return;
+            if (!months.includes(d['Reporting Month'])) return;
             if (!productStats.has(d.SKU)) {
                 productStats.set(d.SKU, { name: d['Product title'], totalRev: 0, totalUnits: 0 });
             }
@@ -1482,6 +1483,7 @@ function updateCategoryDashboard() {
     if (selector && searchInput) {
         let categoryStats = new Map(); // catName -> { totalRev, totalUnits }
         data.forEach(d => {
+            if (!months.includes(d['Reporting Month'])) return;
             getCategoryNames(d).forEach(cat => {
                 if (!categoryStats.has(cat)) {
                     categoryStats.set(cat, { totalRev: 0, totalUnits: 0 });
