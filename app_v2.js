@@ -1342,15 +1342,12 @@ function updateProductDashboard() {
             else selector.value = "__ALL__";
         };
 
-        if (!selector.dataset.initialized) {
-            selector.dataset.initialized = "true";
-            populateOptions();
-            
-            searchInput.oninput = populateOptions;
-            if (minRevInput) minRevInput.oninput = populateOptions;
-            if (maxRevInput) maxRevInput.oninput = populateOptions;
-            if (minUnitsInput) minUnitsInput.oninput = populateOptions;
-            if (maxUnitsInput) maxUnitsInput.oninput = populateOptions;
+        const attachHandlers = () => {
+            searchInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
+            if (minRevInput) minRevInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
+            if (maxRevInput) maxRevInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
+            if (minUnitsInput) minUnitsInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
+            if (maxUnitsInput) maxUnitsInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
 
             selector.onchange = () => {
                 renderProductTrendChart(selector.value, data, months);
@@ -1372,9 +1369,14 @@ function updateProductDashboard() {
                     }
                 };
             }
-        } else {
-            populateOptions();
+        };
+
+        if (!selector.dataset.initialized) {
+            selector.dataset.initialized = "true";
         }
+        
+        populateOptions();
+        attachHandlers();
         
         renderProductTrendChart(selector.value, data, months);
     }
@@ -1525,15 +1527,12 @@ function updateCategoryDashboard() {
             else selector.value = "__ALL__";
         };
 
-        if (!selector.dataset.initialized) {
-            selector.dataset.initialized = "true";
-            populateOptions();
-            
-            searchInput.oninput = populateOptions;
-            if (minRevInput) minRevInput.oninput = populateOptions;
-            if (maxRevInput) maxRevInput.oninput = populateOptions;
-            if (minUnitsInput) minUnitsInput.oninput = populateOptions;
-            if (maxUnitsInput) maxUnitsInput.oninput = populateOptions;
+        const attachHandlers = () => {
+            searchInput.oninput = () => { populateOptions(); renderCategoryTrendChart(selector.value, data, months); };
+            if (minRevInput) minRevInput.oninput = () => { populateOptions(); renderCategoryTrendChart(selector.value, data, months); };
+            if (maxRevInput) maxRevInput.oninput = () => { populateOptions(); renderCategoryTrendChart(selector.value, data, months); };
+            if (minUnitsInput) minUnitsInput.oninput = () => { populateOptions(); renderCategoryTrendChart(selector.value, data, months); };
+            if (maxUnitsInput) maxUnitsInput.oninput = () => { populateOptions(); renderCategoryTrendChart(selector.value, data, months); };
 
             selector.onchange = () => renderCategoryTrendChart(selector.value, data, months);
 
@@ -1553,9 +1552,14 @@ function updateCategoryDashboard() {
                     }
                 };
             }
-        } else {
-            populateOptions();
+        };
+
+        if (!selector.dataset.initialized) {
+            selector.dataset.initialized = "true";
         }
+
+        populateOptions();
+        attachHandlers();
         renderCategoryTrendChart(selector.value, data, months);
     }
 
