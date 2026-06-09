@@ -140,6 +140,63 @@
                         <canvas id="customerAovChart"></canvas>
                     </div>
                 </div>
+
+                <!-- AI Referral Acquisition Widget -->
+                <div class="card" style="margin-top: 1.5rem;" id="aiReferralsCard">
+                    <h3 style="display:flex; align-items:center; gap: 0.5rem;">
+                        🤖 AI Referral Acquisition 
+                        <span class="info-tip" title="Tracks customer orders and revenue generated via AI assistant recommendations (e.g., Gemini, ChatGPT, Claude) based on order referrer/UTM data.">?</span>
+                    </h3>
+                    <div id="aiReferralNotice" style="display: block; padding: 0.75rem 1rem; background: #FFFBEB; border-left: 4px solid #F59E0B; color: #B45309; font-size: 0.875rem; border-radius: 4px; margin-top: 1rem;">
+                        ⚠️ Upload the <strong>AI Referral Acquisition</strong> CSV to view AI recommendation trends. The SQL script to extract this data is available as <strong>Script #12</strong> in the SQL Developer Hub.
+                    </div>
+                    <div id="aiReferralContent" style="display: none; margin-top: 1.5rem;">
+                        <!-- AI Metrics -->
+                        <div class="trend-summary-grid" style="margin-bottom: 1.5rem;">
+                            <div class="trend-summary-card">
+                                <span class="trend-summary-label">Total AI Orders</span>
+                                <strong class="trend-summary-value" id="aiTotalOrders">--</strong>
+                            </div>
+                            <div class="trend-summary-card">
+                                <span class="trend-summary-label">Total AI Revenue</span>
+                                <strong class="trend-summary-value" id="aiTotalRevenue">--</strong>
+                            </div>
+                            <div class="trend-summary-card">
+                                <span class="trend-summary-label">AI-Assisted AOV</span>
+                                <strong class="trend-summary-value" id="aiAov">--</strong>
+                            </div>
+                            <div class="trend-summary-card">
+                                <span class="trend-summary-label">AI Channel Share</span>
+                                <strong class="trend-summary-value" id="aiShare">--</strong>
+                            </div>
+                        </div>
+                        <!-- Split charts/tables -->
+                        <div class="dashboard-grid" style="grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem;">
+                            <div class="chart-card">
+                                <h3>AI Referral Order Volumes</h3>
+                                <div class="chart-container" style="height: 320px;">
+                                    <canvas id="aiReferralTrendChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>AI Engine Performance</h3>
+                                <div class="table-container" style="max-height: 320px; overflow-y: auto;">
+                                    <table class="data-table" id="aiReferralTable">
+                                        <thead>
+                                            <tr>
+                                                <th>AI Engine</th>
+                                                <th>Orders</th>
+                                                <th>Revenue</th>
+                                                <th>AOV</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Tab 3: Shipping & Delivery -->
