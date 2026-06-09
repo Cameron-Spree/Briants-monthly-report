@@ -433,6 +433,22 @@
                 <div class="card" style="margin-bottom: 1.5rem;">
                     <input type="text" id="basketFilter" placeholder="Search for a product..." style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.9rem; box-sizing: border-box;">
                 </div>
+                
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                        <h3 style="margin: 0; display:flex; align-items:center; gap: 0.5rem;">Average Basket Value Over Time <span title="Tracks the Average Order Value (AOV) of orders over time. Use the dropdown to filter to orders containing at least one item from the selected category." style="cursor:help; background:#e2e8f0; color:#475569; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px;">?</span></h3>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label for="basketAovCategorySelect" style="font-size: 0.85rem; font-weight: 600; color: #64748B;">Filter by Category:</label>
+                            <select id="basketAovCategorySelect" style="padding: 0.25rem 0.5rem; border: 1px solid #CBD5E1; border-radius: 4px; font-family: inherit; font-size: 0.9rem; min-width: 200px;">
+                                <option value="">All Categories</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="basketAovNotice" style="display: none; padding: 0.5rem 0.75rem; background: #FFFBEB; border-left: 4px solid #F59E0B; color: #B45309; font-size: 0.85rem; margin-bottom: 1rem; border-radius: 4px;"></div>
+                    <div class="chart-container" style="height: 350px;">
+                        <canvas id="basketAovTrendChart"></canvas>
+                    </div>
+                </div>
                 <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <div class="chart-card">
                         <h3>Top 10 Most Paired Products <span class="info-tip" title="Horizontal bar chart showing the 10 product pairs most frequently purchased together in the same order.">?</span></h3>

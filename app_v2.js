@@ -365,6 +365,16 @@ ORDER BY \`Total Repeat Buyers\` DESC;`
             query: `SELECT 
     DATE_FORMAT(os.date_created, '%Y-%m') AS \`Reporting Month\`,
     COALESCE(NULLIF(var_p.post_title, ''), parent_p.post_title) AS \`Product Name\`,
+    (
+        SELECT GROUP_CONCAT(t.name SEPARATOR ', ')
+        FROM wp_term_relationships tr
+        JOIN wp_term_taxonomy tt
+            ON tt.term_taxonomy_id = tr.term_taxonomy_id
+           AND tt.taxonomy = 'product_cat'
+        JOIN wp_terms t
+            ON t.term_id = tt.term_id
+        WHERE tr.object_id = opl.product_id
+    ) AS \`Category\`,
     COUNT(DISTINCT os.order_id) AS \`Total Orders Containing Item\`,
     SUM(opl.product_net_revenue) AS \`Item Direct Revenue\`,
     SUM(os.net_total) AS \`Total Basket Revenue\`,
@@ -801,7 +811,9 @@ function updateDashboards() {
         updateCategoryDashboard();
         updateCategoryBrowser();
     }
-    if (appData.basket) updateBasketDashboard();
+    if (appData.basket || appData.basketProject || appData.basketConsumables || appData.basketAnchors || appData.basketCrossCategory) {
+        updateBasketDashboard();
+    }
     if (appData.payment) updatePaymentDashboard();
     updateActivityDashboard();
     updateDataStatusTab();
@@ -1095,6 +1107,7 @@ async function exportFullReport() {
                 { label: 'Maintenance AOV', id: 'maintenanceAovMetric', desc: 'Average order value for baskets classified as maintenance (≤3 unique items and ≤15 units).' }
             ],
             charts: [
+                { id: 'basketAovTrendChart', title: 'Average Basket Value Over Time', desc: 'Tracks the Average Order Value (AOV) of orders over time, filtered to orders containing at least one item from the selected category.' },
                 { id: 'basketTopPairsChart', title: 'Top 10 Most Paired Products', desc: 'Horizontal bar chart showing the 10 product pairs most frequently purchased together in the same order.' },
                 { id: 'basketDistChart', title: 'Pair Frequency Distribution', desc: 'Distribution chart showing how many product pairs occur at each frequency level — helps identify whether cross-selling is concentrated or broad.' },
                 { id: 'basketProjectSplitChart', title: 'Project vs. Maintenance Baskets', desc: 'Categorizes baskets based on item quantity/variety to show if orders are typically large projects or single-item maintenance purchases.' },
@@ -1142,7 +1155,9 @@ async function exportFullReport() {
         updateProductDashboard();
         updateCategoryDashboard();
     }
-    if (appData.basket) updateBasketDashboard();
+    if (appData.basket || appData.basketProject || appData.basketConsumables || appData.basketAnchors || appData.basketCrossCategory) {
+        updateBasketDashboard();
+    }
     if (appData.payment) updatePaymentDashboard();
 
     // Wait for Chart.js animation frames to complete painting
@@ -2113,59 +2128,58 @@ function updateCategoryBrowser() {
 }
 
 function updateBasketDashboard() {
-    const data = normalizeBasketRows(appData.basket);
-    if (!data || data.length === 0) return;
-    
+    // 1. Product Pairings
+    const basketData = appData.basket ? normalizeBasketRows(appData.basket) : [];
     const filterInput = document.getElementById('basketFilter');
     const tbody = document.querySelector('#basketTable tbody');
-    if (!tbody) return;
+    if (tbody) {
+        const renderTable = () => {
+            let term = filterInput ? filterInput.value.toLowerCase() : "";
+            let filtered = basketData;
+            if (term) {
+                filtered = basketData.filter(d => 
+                    String(d['Product A'] || "").toLowerCase().includes(term) ||
+                    String(d['Product B'] || "").toLowerCase().includes(term)
+                );
+            }
 
-    const renderTable = () => {
-        let term = filterInput ? filterInput.value.toLowerCase() : "";
-        let filtered = data;
-        if (term) {
-            filtered = data.filter(d => 
-                String(d['Product A'] || "").toLowerCase().includes(term) ||
-                String(d['Product B'] || "").toLowerCase().includes(term)
-            );
-        }
+            tbody.innerHTML = '';
+            filtered.slice(0, 100).forEach(d => {
+                let tr = document.createElement('tr');
+                let productACell = document.createElement('td');
+                let productBCell = document.createElement('td');
+                let countCell = document.createElement('td');
+                productACell.textContent = d['Product A'];
+                productBCell.textContent = d['Product B'];
+                countCell.textContent = d['Times Bought Together'];
+                countCell.style.fontWeight = '600';
+                countCell.style.color = '#009640';
+                countCell.style.textAlign = 'center';
+                tr.appendChild(productACell);
+                tr.appendChild(productBCell);
+                tr.appendChild(countCell);
+                tbody.appendChild(tr);
+            });
 
-        tbody.innerHTML = '';
-        filtered.slice(0, 100).forEach(d => {
-            let tr = document.createElement('tr');
-            let productACell = document.createElement('td');
-            let productBCell = document.createElement('td');
-            let countCell = document.createElement('td');
-            productACell.textContent = d['Product A'];
-            productBCell.textContent = d['Product B'];
-            countCell.textContent = d['Times Bought Together'];
-            countCell.style.fontWeight = '600';
-            countCell.style.color = '#009640';
-            countCell.style.textAlign = 'center';
-            tr.appendChild(productACell);
-            tr.appendChild(productBCell);
-            tr.appendChild(countCell);
-            tbody.appendChild(tr);
-        });
+            let top10 = filtered.slice(0, 10);
+            renderBarChart('basketTopPairsChart', top10.map(d => String(d['Product A']).substring(0,15) + ' + ' + String(d['Product B']).substring(0,15)), top10.map(d => d['Times Bought Together']), 'Pairings', '#009640', 'y');
+            
+            let bins = { "3-5": 0, "6-10": 0, "11-20": 0, "21+": 0 };
+            filtered.forEach(d => {
+                let v = d['Times Bought Together'];
+                if (v <= 5) bins["3-5"]++;
+                else if (v <= 10) bins["6-10"]++;
+                else if (v <= 20) bins["11-20"]++;
+                else bins["21+"]++;
+            });
+            renderBarChart('basketDistChart', Object.keys(bins), Object.values(bins), 'No. of Pairs', '#373737', 'x');
+        };
 
-        let top10 = filtered.slice(0, 10);
-        renderBarChart('basketTopPairsChart', top10.map(d => String(d['Product A']).substring(0,15) + ' + ' + String(d['Product B']).substring(0,15)), top10.map(d => d['Times Bought Together']), 'Pairings', '#009640', 'y');
-        
-        let bins = { "3-5": 0, "6-10": 0, "11-20": 0, "21+": 0 };
-        filtered.forEach(d => {
-            let v = d['Times Bought Together'];
-            if (v <= 5) bins["3-5"]++;
-            else if (v <= 10) bins["6-10"]++;
-            else if (v <= 20) bins["11-20"]++;
-            else bins["21+"]++;
-        });
-        renderBarChart('basketDistChart', Object.keys(bins), Object.values(bins), 'No. of Pairs', '#373737', 'x');
-    };
+        if (filterInput) filterInput.oninput = renderTable;
+        renderTable();
+    }
 
-    if (filterInput) filterInput.oninput = renderTable;
-    renderTable();
-
-    // 1. Project vs Maintenance
+    // 2. Project vs Maintenance
     if (appData.basketProject && appData.basketProject.length > 0) {
         let projBaskets = 0, maintBaskets = 0;
         let projRev = 0, projCount = 0;
@@ -2201,7 +2215,7 @@ function updateBasketDashboard() {
         }
     }
 
-    // 2. Cross-Category
+    // 3. Cross-Category
     if (appData.basketCrossCategory && appData.basketCrossCategory.length > 0) {
         let multi = 0, single = 0;
         appData.basketCrossCategory.forEach(d => {
@@ -2220,7 +2234,7 @@ function updateBasketDashboard() {
         }
     }
 
-    // 3. Consumables Table
+    // 4. Consumables Table
     if (appData.basketConsumables && appData.basketConsumables.length > 0) {
         const cBody = document.querySelector('#consumableVelocityTable tbody');
         if (cBody) {
@@ -2234,7 +2248,7 @@ function updateBasketDashboard() {
         }
     }
 
-    // 4. AOV Multipliers
+    // 5. AOV Multipliers
     if (appData.basketAnchors && appData.basketAnchors.length > 0) {
         let anchorStats = {};
         appData.basketAnchors.forEach(d => {
@@ -2255,6 +2269,145 @@ function updateBasketDashboard() {
         
         renderBarChart('aovMultipliersChart', topAnchors.map(a => a.name.substring(0, 25)), topAnchors.map(a => Math.round(a.avgAov)), 'Avg Basket Value (£)', '#EF4444', 'y');
     }
+
+    // 6. Average Basket Value Over Time with Category Dropdown Filter
+    let selectEl = document.getElementById('basketAovCategorySelect');
+    let noticeEl = document.getElementById('basketAovNotice');
+
+    // Build category list for the dropdown
+    let categories = new Set();
+    if (appData.product) {
+        appData.product.forEach(row => {
+            getCategoryNames(row).forEach(c => categories.add(c));
+        });
+    }
+    if (appData.categoryHierarchy) {
+        appData.categoryHierarchy.forEach(row => {
+            if (row['Category Name']) categories.add(row['Category Name']);
+            if (row['Parent Name']) categories.add(row['Parent Name']);
+        });
+    }
+
+    if (selectEl) {
+        let currentSel = selectEl.value;
+        selectEl.innerHTML = '<option value="">All Categories</option>';
+        Array.from(categories).sort().forEach(cat => {
+            let opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            selectEl.appendChild(opt);
+        });
+        if (currentSel && categories.has(currentSel)) {
+            selectEl.value = currentSel;
+        }
+    }
+
+    // Show/hide missing basketAnchors dataset warning banner
+    if (noticeEl) {
+        if (!appData.basketAnchors || appData.basketAnchors.length === 0) {
+            noticeEl.textContent = "⚠️ Upload 'Top AOV Multipliers (High-Value Anchors)' CSV to enable category breakdown filtering.";
+            noticeEl.style.display = "block";
+        } else {
+            noticeEl.style.display = "none";
+        }
+    }
+
+    // Build category lookup mapping for products
+    let productToCategories = {};
+    if (appData.product) {
+        appData.product.forEach(row => {
+            let title = row['Product title'];
+            if (title && row.Category) {
+                if (!productToCategories[title]) {
+                    productToCategories[title] = new Set();
+                }
+                getCategoryNames(row).forEach(c => productToCategories[title].add(c));
+            }
+        });
+    }
+    if (appData.basketConsumables) {
+        appData.basketConsumables.forEach(row => {
+            let title = row['Product Name'];
+            if (title && row.Category) {
+                if (!productToCategories[title]) {
+                    productToCategories[title] = new Set();
+                }
+                getCategoryNames(row).forEach(c => productToCategories[title].add(c));
+            }
+        });
+    }
+
+    const renderBasketAovTrend = () => {
+        const selectedCategory = selectEl ? selectEl.value : "";
+        const months = getMonthsInRange();
+        
+        let aovData = months.map(m => {
+            if (!selectedCategory) {
+                // All Categories (Overall Store AOV)
+                if (appData.executive && appData.executive.length > 0) {
+                    let execRow = appData.executive.find(d => d['Reporting Month'] === m);
+                    if (execRow && execRow.average_order_value !== undefined) {
+                        return execRow.average_order_value;
+                    }
+                }
+                if (appData.basketProject && appData.basketProject.length > 0) {
+                    let monthRows = appData.basketProject.filter(d => d['Reporting Month'] === m);
+                    if (monthRows.length > 0) {
+                        let totalRev = monthRows.reduce((sum, r) => sum + (r['Total Revenue'] || 0), 0);
+                        let totalBaskets = monthRows.reduce((sum, r) => sum + (r['Total Baskets'] || 0), 0);
+                        if (totalBaskets > 0) return totalRev / totalBaskets;
+                    }
+                }
+                if (appData.basketAnchors && appData.basketAnchors.length > 0) {
+                    let monthRows = appData.basketAnchors.filter(d => d['Reporting Month'] === m);
+                    if (monthRows.length > 0) {
+                        let totalRev = monthRows.reduce((sum, r) => sum + (r['Total Basket Revenue'] || 0), 0);
+                        let totalOrders = monthRows.reduce((sum, r) => sum + (r['Total Orders Containing Item'] || 0), 0);
+                        if (totalOrders > 0) return totalRev / totalOrders;
+                    }
+                }
+                return 0;
+            } else {
+                // Filtered by Selected Category
+                if (appData.basketAnchors && appData.basketAnchors.length > 0) {
+                    let monthRows = appData.basketAnchors.filter(d => d['Reporting Month'] === m);
+                    let totalRev = 0;
+                    let totalOrders = 0;
+                    monthRows.forEach(d => {
+                        let cats = [];
+                        if (d.Category) {
+                            cats = getCategoryNames(d);
+                        } else {
+                            let name = d['Product Name'];
+                            if (name && productToCategories[name]) {
+                                cats = Array.from(productToCategories[name]);
+                            }
+                        }
+                        if (cats.includes(selectedCategory)) {
+                            totalRev += (d['Total Basket Revenue'] || 0);
+                            totalOrders += (d['Total Orders Containing Item'] || 0);
+                        }
+                    });
+                    return totalOrders > 0 ? (totalRev / totalOrders) : 0;
+                }
+                return 0;
+            }
+        });
+        
+        let label = selectedCategory ? `Avg Basket Value: ${selectedCategory} (£)` : 'Overall Average Basket Value (£)';
+        renderLineChart('basketAovTrendChart', months.map(formatMonthLabel), {
+            label: label,
+            data: aovData.map(v => Math.round(v)),
+            color: '#8B5CF6' // Premium violet/purple color for basket analysis
+        });
+    };
+
+    if (selectEl && !selectEl.dataset.listenerAttached) {
+        selectEl.addEventListener('change', renderBasketAovTrend);
+        selectEl.dataset.listenerAttached = "true";
+    }
+
+    renderBasketAovTrend();
 }
 
 
