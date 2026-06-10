@@ -706,10 +706,10 @@ function initFileUpload() {
                             recordLoad('shipping', 'Shipping');
                         } else if (fields.includes('customer_type')) {
                             recordLoad('customer', 'Customer');
-                        } else if (fields.includes('Reporting Month') && fields.includes('average_order_value')) {
-                            recordLoad('executive', 'Executive');
                         } else if (fields.includes('AI Engine') && fields.includes('Reporting Month')) {
                             recordLoad('aiReferral', 'AI Referrals');
+                        } else if (fields.includes('Reporting Month') && fields.includes('average_order_value')) {
+                            recordLoad('executive', 'Executive');
                         } else {
                             unrecognizedFiles.push(files[i].name + ': ' + fields.join(', '));
                         }
