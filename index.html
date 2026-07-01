@@ -360,9 +360,8 @@
             <section id="tab-productsales" class="tab-content">
                 <h2 class="section-title">Product Sales (Content &amp; Marketing Optimiser)</h2>
                 
-                <!-- Filters -->
-                <div class="card" style="margin-bottom: 1.5rem;">
-                    <div class="dashboard-grid" style="grid-template-columns: 1.5fr 1.2fr 1fr 1fr 0.8fr; gap: 1rem; align-items: flex-end; margin-bottom: 0;">
+                          <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="dashboard-grid" style="grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr 0.6fr; gap: 0.75rem; align-items: flex-end; margin-bottom: 0;">
                         <div>
                             <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #475569;">Search Product</label>
                             <input type="text" id="productSalesSearch" placeholder="Search by SKU or name..." style="width: 100%; padding: 0.5rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.875rem; box-sizing: border-box;">
@@ -371,6 +370,17 @@
                             <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #475569;">Category</label>
                             <select id="productSalesCategoryFilter" style="width: 100%; padding: 0.5rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.875rem; box-sizing: border-box; background: white;">
                                 <option value="">All Categories</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #475569;">Segment</label>
+                            <select id="productSalesSegmentFilter" style="width: 100%; padding: 0.5rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.875rem; box-sizing: border-box; background: white;">
+                                <option value="">All Segments</option>
+                                <option value="seo">🔥 High SEO Priority</option>
+                                <option value="cross">🛒 Cross-Sell Focus</option>
+                                <option value="rising">📈 Rising Star</option>
+                                <option value="declining">⚠️ Underperforming</option>
+                                <option value="standard">Standard Priority</option>
                             </select>
                         </div>
                         <div>

@@ -2687,6 +2687,148 @@ function exportFilteredCategories() {
 let productSalesSortCol = "revenue"; 
 let productSalesSortDir = "desc";    
 
+function getProductSegment(product, totalStoreRevenue, months) {
+    let totalRev = product.totalRev;
+    let totalUnits = product.totalUnits;
+    let avgPrice = totalUnits > 0 ? (totalRev / totalUnits) : 0;
+    let revShare = totalStoreRevenue > 0 ? (totalRev / totalStoreRevenue * 100) : 0;
+
+    // 1. Identify Sliding Trend Windows
+    let N = months.length;
+    let recentMonths = [];
+    let olderMonths = [];
+
+    if (N >= 6) {
+        recentMonths = months.slice(N - 3);
+        olderMonths = months.slice(N - 6, N - 3);
+    } else if (N >= 2) {
+        let half = Math.floor(N / 2);
+        recentMonths = months.slice(N - half);
+        olderMonths = months.slice(0, N - half);
+    } else {
+        recentMonths = months;
+        olderMonths = [];
+    }
+
+    // 2. Sum sales in windows
+    let recentRev = product.rows.filter(r => recentMonths.includes(r['Reporting Month'])).reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
+    let recentUnits = product.rows.filter(r => recentMonths.includes(r['Reporting Month'])).reduce((sum, r) => sum + (Number(r['Units']) || 0), 0);
+    let olderRev = product.rows.filter(r => olderMonths.includes(r['Reporting Month'])).reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
+
+    let recentAvg = recentMonths.length > 0 ? (recentRev / recentMonths.length) : 0;
+    let olderAvg = olderMonths.length > 0 ? (olderRev / olderMonths.length) : 0;
+
+    // 3. Dormant check (no sales at all in last 3 months of selected range)
+    let isDormant = (N >= 3 && recentUnits === 0);
+
+    // 4. YoY Seasonality check
+    let isSeasonalDip = false;
+    let yoyChange = 0;
+    let hasYoYData = false;
+
+    const getSameMonthLastYear = (ym) => {
+        let parts = ym.split('-');
+        return (parseInt(parts[0]) - 1) + '-' + parts[1];
+    };
+
+    let pctChange = 0;
+    if (olderAvg > 0 && !isDormant) {
+        pctChange = ((recentAvg - olderAvg) / olderAvg) * 100;
+        if (pctChange < -10) {
+            let yoyMonths = recentMonths.map(getSameMonthLastYear);
+            let dbData = appData.product;
+            let sampleRow = dbData.find(d => yoyMonths.includes(d['Reporting Month']));
+            if (sampleRow) {
+                hasYoYData = true;
+                let yoyRev = product.rows.filter(r => yoyMonths.includes(r['Reporting Month'])).reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
+                if (yoyRev > 0) {
+                    yoyChange = ((recentRev - yoyRev) / yoyRev) * 100;
+                    if (yoyChange >= -5) {
+                        isSeasonalDip = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. Determine Trend Text and Color
+    let trendText = "";
+    let trendColor = "#373737";
+
+    if (isDormant) {
+        trendText = "💤 Dormant (No recent sales in last 3M)";
+        trendColor = "#94A3B8";
+    } else if (olderAvg > 0) {
+        if (isSeasonalDip) {
+            trendText = `🍂 Seasonal Dip (YoY stable/growing ${yoyChange >= 0 ? '+' : ''}${Math.round(yoyChange)}%)`;
+            trendColor = "#D97706";
+        } else if (pctChange > 10) {
+            trendText = `📈 Growing (+${Math.round(pctChange)}%)`;
+            trendColor = "#009640";
+        } else if (pctChange < -10) {
+            trendText = `📉 Declining (${Math.round(pctChange)}% MoM${hasYoYData ? `, YoY ${Math.round(yoyChange)}%` : ''})`;
+            trendColor = "#EF4444";
+        } else {
+            trendText = `➡️ Stable (+/- 10% variation)`;
+            trendColor = "#475569";
+        }
+    } else {
+        if (recentAvg > 0) {
+            trendText = `✨ Emerging (New product / launch)`;
+            trendColor = "#3B82F6";
+        } else {
+            trendText = `Stable (No sales)`;
+            trendColor = "#64748B";
+        }
+    }
+
+    // 6. Determine Priority Segment Key
+    let segmentKey = "standard";
+    let segmentTitle = "Standard Optimization";
+    let segmentBadge = `<span style="background: #F1F5F9; color: #475569; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #E2E8F0;">Standard Priority</span>`;
+
+    if (revShare >= 1.0) {
+        segmentKey = "seo";
+        segmentTitle = "High-Impact Revenue Driver";
+        segmentBadge = `<span style="background: #FEF3C7; color: #D97706; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #FDE68A;">🔥 High SEO Priority</span>`;
+    } else if (avgPrice < 25 && totalUnits >= 15) {
+        segmentKey = "cross";
+        segmentTitle = "High-Volume Catalog Driver";
+        segmentBadge = `<span style="background: #E0F2FE; color: #0369A1; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #BAE6FD;">🛒 Cross-Sell Focus</span>`;
+    } else if (isDormant) {
+        segmentKey = "standard";
+        segmentTitle = "Dormant Product";
+        segmentBadge = `<span style="background: #F1F5F9; color: #64748B; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #CBD5E1;">💤 Dormant</span>`;
+    } else if (isSeasonalDip) {
+        segmentKey = "standard";
+        segmentTitle = "Seasonal Maintenance";
+        segmentBadge = `<span style="background: #FFF3C4; color: #D97706; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #FDE68A;">🍂 Seasonal Dip</span>`;
+    } else if (pctChange < -10) {
+        segmentKey = "declining";
+        segmentTitle = "Declining Sales Recovery";
+        segmentBadge = `<span style="background: #FEE2E2; color: #991B1B; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #FCA5A5;">⚠️ Underperforming</span>`;
+    } else if (pctChange > 10) {
+        segmentKey = "rising";
+        segmentTitle = "Rising Momentum Product";
+        segmentBadge = `<span style="background: #DCFCE7; color: #166534; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #BBF7D0;">📈 Rising Star</span>`;
+    }
+
+    return {
+        segmentKey,
+        segmentTitle,
+        segmentBadge,
+        avgPrice,
+        revShare,
+        trendText,
+        trendColor,
+        pctChange,
+        isDormant,
+        isSeasonalDip,
+        yoyChange,
+        hasYoYData
+    };
+}
+
 function updateProductSalesDashboard() {
     const data = appData.product;
     if (!data || data.length === 0) return;
@@ -2696,11 +2838,12 @@ function updateProductSalesDashboard() {
     // 1. Inputs
     const searchInput = document.getElementById('productSalesSearch');
     const categorySelect = document.getElementById('productSalesCategoryFilter');
+    const segmentSelect = document.getElementById('productSalesSegmentFilter');
     const minRevInput = document.getElementById('productSalesMinRev');
     const minUnitsInput = document.getElementById('productSalesMinUnits');
     const resetBtn = document.getElementById('productSalesResetFilters');
 
-    if (!searchInput || !categorySelect) return;
+    if (!searchInput || !categorySelect || !segmentSelect) return;
 
     // Get all unique categories for the dropdown filter (only run once)
     if (!categorySelect.dataset.populated) {
@@ -2726,6 +2869,7 @@ function updateProductSalesDashboard() {
         resetBtn.onclick = () => {
             searchInput.value = "";
             categorySelect.value = "";
+            segmentSelect.value = "";
             minRevInput.value = "";
             minUnitsInput.value = "";
             updateProductSalesDashboard();
@@ -2740,14 +2884,22 @@ function updateProductSalesDashboard() {
     if (!searchInput.dataset.bound) {
         searchInput.oninput = retrigger;
         categorySelect.onchange = retrigger;
+        segmentSelect.onchange = retrigger;
         minRevInput.oninput = retrigger;
         minUnitsInput.oninput = retrigger;
         searchInput.dataset.bound = "true";
     }
 
-    // 2. Aggregate Data
-    let productStats = new Map(); // SKU -> { sku, name, category, totalUnits: 0, totalRev: 0, rows: [] }
+    // 2. Compute Total Catalog Revenue (for share calculation)
     let totalStoreRevenue = 0;
+    data.forEach(d => {
+        if (!d.SKU) return;
+        if (!months.includes(d['Reporting Month'])) return;
+        totalStoreRevenue += (Number(d['N. Revenue']) || 0);
+    });
+
+    // 3. Aggregate Data
+    let productStats = new Map(); // SKU -> { sku, name, category, totalUnits: 0, totalRev: 0, rows: [] }
 
     data.forEach(d => {
         if (!d.SKU) return;
@@ -2755,7 +2907,6 @@ function updateProductSalesDashboard() {
         
         let rev = Number(d['N. Revenue']) || 0;
         let units = Number(d['Units']) || 0;
-        totalStoreRevenue += rev;
 
         if (!productStats.has(d.SKU)) {
             let cats = getCategoryNames(d);
@@ -2776,9 +2927,15 @@ function updateProductSalesDashboard() {
         p.rows.push(d);
     });
 
-    // 3. Filter aggregated products
+    // Compute segment for each product
+    productStats.forEach(p => {
+        p.segment = getProductSegment(p, totalStoreRevenue, months);
+    });
+
+    // 4. Filter aggregated products
     let filterKeyword = searchInput.value.toLowerCase().trim();
     let filterCategory = categorySelect.value;
+    let filterSegment = segmentSelect.value;
     let minRev = parseFloat(minRevInput.value) || 0;
     let minUnits = parseFloat(minUnitsInput.value) || 0;
 
@@ -2790,13 +2947,16 @@ function updateProductSalesDashboard() {
         if (filterCategory && !p.categories.includes(filterCategory)) {
             return;
         }
+        if (filterSegment && p.segment.segmentKey !== filterSegment) {
+            return;
+        }
         if (p.totalRev < minRev) return;
         if (p.totalUnits < minUnits) return;
 
         filteredProducts.push(p);
     });
 
-    // 4. Sort products
+    // 5. Sort products
     filteredProducts.sort((a, b) => {
         let valA, valB;
         if (productSalesSortCol === 'sku') {
@@ -2818,7 +2978,7 @@ function updateProductSalesDashboard() {
 
     window.lastFilteredSalesProducts = filteredProducts;
 
-    // 5. Select default product if none selected or if selected is not in filtered list
+    // 6. Select default product if none selected or if selected is not in filtered list
     if (!selectedProductSalesSku || !productStats.has(selectedProductSalesSku)) {
         if (filteredProducts.length > 0) {
             selectedProductSalesSku = filteredProducts[0].sku;
@@ -2827,7 +2987,7 @@ function updateProductSalesDashboard() {
         }
     }
 
-    // 6. Bind sort headers click events
+    // 7. Bind sort headers click events
     const bindSort = (id, colName) => {
         const el = document.getElementById(id);
         if (el && !el.dataset.bound) {
@@ -2864,7 +3024,7 @@ function updateProductSalesDashboard() {
         }
     };
 
-    // 7. Render Table
+    // 8. Render Table
     const tbody = document.querySelector('#productSalesTable tbody');
     if (tbody) {
         tbody.innerHTML = '';
@@ -2906,11 +3066,11 @@ function updateProductSalesDashboard() {
         }
     }
 
-    // 8. Render trend chart for selected product
+    // 9. Render trend chart for selected product
     if (selectedProductSalesSku && productStats.has(selectedProductSalesSku)) {
         const selectedProduct = productStats.get(selectedProductSalesSku);
         renderProductSalesTrendChart(selectedProduct);
-        renderProductSalesOptimiser(selectedProduct, totalStoreRevenue, months);
+        renderProductSalesOptimiser(selectedProduct);
     } else {
         if (window.productSalesTrendChart instanceof Chart) {
             window.productSalesTrendChart.destroy();
@@ -2959,80 +3119,48 @@ function toggleProductSalesDataset(datasetIndex, visible) {
     }
 }
 
-function renderProductSalesOptimiser(product, totalStoreRevenue, months) {
+function renderProductSalesOptimiser(product) {
     const container = document.getElementById('productSalesOptimiserContent');
     if (!container) return;
 
-    let totalRev = product.totalRev;
-    let totalUnits = product.totalUnits;
-    let avgPrice = totalUnits > 0 ? (totalRev / totalUnits) : 0;
-    let revShare = totalStoreRevenue > 0 ? (totalRev / totalStoreRevenue * 100) : 0;
+    const segment = product.segment;
+    let avgPrice = segment.avgPrice;
+    let revShare = segment.revShare;
+    let trendText = segment.trendText;
+    let trendColor = segment.trendColor;
+    let isDormant = segment.isDormant;
+    let isSeasonalDip = segment.isSeasonalDip;
+    let segmentTitle = segment.segmentTitle;
+    let segmentBadge = segment.segmentBadge;
 
-    let halfIndex = Math.floor(months.length / 2);
-    let olderMonths = months.slice(0, halfIndex);
-    let newerMonths = months.slice(halfIndex);
-
-    let olderRev = product.rows.filter(r => olderMonths.includes(r['Reporting Month'])).reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
-    let newerRev = product.rows.filter(r => newerMonths.includes(r['Reporting Month'])).reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
-
-    let olderAvg = olderMonths.length > 0 ? (olderRev / olderMonths.length) : 0;
-    let newerAvg = newerMonths.length > 0 ? (newerRev / newerMonths.length) : 0;
-
-    let trendText = "";
-    let trendColor = "#373737";
-    let pctChange = 0;
-    if (olderAvg > 0) {
-        pctChange = ((newerAvg - olderAvg) / olderAvg) * 100;
-        if (pctChange > 5) {
-            trendText = `Growing (+${Math.round(pctChange)}%)`;
-            trendColor = "#009640";
-        } else if (pctChange < -5) {
-            trendText = `Declining (${Math.round(pctChange)}%)`;
-            trendColor = "#EF4444";
-        } else {
-            trendText = `Stable (No change)`;
-            trendColor = "#475569";
-        }
-    } else {
-        if (newerAvg > 0) {
-            trendText = `Emerging (New)`;
-            trendColor = "#3B82F6";
-        } else {
-            trendText = `No Sales`;
-            trendColor = "#64748B";
-        }
-    }
-
-    let segmentTitle = "Standard Optimization";
-    let segmentBadge = `<span style="background: #F1F5F9; color: #475569; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem;">Standard Priority</span>`;
     let seoRecommendation = `Create standard descriptive product copy and make sure the SKU is searchable in search engines.`;
     let upsellRecommendation = `Add simple related product links or bundles at checkout to encourage multi-item purchases.`;
     let redirectRecommendation = `Regularly check stock levels to avoid 'out of stock' bounces on search engines.`;
 
-    if (revShare >= 1.0) {
-        segmentTitle = "High-Impact Revenue Driver";
-        segmentBadge = `<span style="background: #FEF3C7; color: #D97706; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #FDE68A;">🔥 High SEO Priority</span>`;
+    if (segment.segmentKey === 'seo') {
         seoRecommendation = `<strong>Write target blog guides:</strong> Since this product represents a massive <strong>${revShare.toFixed(2)}%</strong> of your revenue, write dedicated blogs (e.g. buying guides, installation tutorials) and link directly back to this product page. This will drive maximum organic traffic.`;
         upsellRecommendation = `<strong>Premium Upsells:</strong> Target this product page for high-margin accessory cross-sells. Offer small discounts if they add compatible accessories directly from this page.`;
         redirectRecommendation = `<strong>Alternative fallback:</strong> In case this high-value model goes out of stock, create a clear highlighted banner linking to a newer model or direct equivalent to retain the buyer.`;
-    } else if (avgPrice < 25 && totalUnits >= 15) {
-        segmentTitle = "High-Volume Catalog Driver";
-        segmentBadge = `<span style="background: #E0F2FE; color: #0369A1; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #BAE6FD;">🛒 Cross-Sell Focus</span>`;
+    } else if (segment.segmentKey === 'cross') {
         seoRecommendation = `<strong>Internal Link Building:</strong> Add internal anchor text from your main category pages and blog index pointing to this page to solidify its positioning as an affordable entry point.`;
         upsellRecommendation = `<strong>Cart Builder / Bundling:</strong> Since this item has a low unit price (${formatCurrency(avgPrice)}) but sells frequently, bundle it with accessories (e.g. buy 3, get 10% off) to drive up your AOV.`;
         redirectRecommendation = `<strong>Premium Upsell Redirection:</strong> Place a clear comparison matrix on the product page showing this entry model next to a premium, higher-margin alternative.`;
-    } else if (pctChange < -10) {
-        segmentTitle = "Declining Sales Recovery";
-        segmentBadge = `<span style="background: #FEE2E2; color: #991B1B; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #FCA5A5;">⚠️ Underperforming</span>`;
+    } else if (segment.segmentKey === 'declining') {
         seoRecommendation = `<strong>Content Refresh:</strong> Refresh the product title, features, and metadata. Add common customer questions directly to the product description to target fresh search queries.`;
         upsellRecommendation = `<strong>Promo Campaign:</strong> Run a limited-time bundle discount or coupon code specifically targeting this item to restart sales momentum.`;
         redirectRecommendation = `<strong>Alternative Promotion:</strong> If there is a newer, better model or if this product is discontinued, insert a permanent alert at the top of the description directing users to the newer alternative.`;
-    } else if (pctChange > 10) {
-        segmentTitle = "Rising Momentum Product";
-        segmentBadge = `<span style="background: #DCFCE7; color: #166534; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #BBF7D0;">📈 Rising Star</span>`;
+    } else if (segment.segmentKey === 'rising') {
         seoRecommendation = `<strong>Feature on Homepage / Newsletter:</strong> Capitalize on this growing product's momentum. Write a quick feature post or showcase it in the next marketing email.`;
         upsellRecommendation = `<strong>Configure Accessories:</strong> As demand rises, ensure all relevant accessories and cleaning kits are configured as cross-sells in WooCommerce to capitalize on cart size.`;
         redirectRecommendation = `<strong>Stock Alerts:</strong> With growing velocity, double-check inventory levels with supplier to ensure stock is maintained.`;
+    } else if (isDormant) {
+        seoRecommendation = `<strong>Dormant Product Copy:</strong> This product has not recorded sales in the last 3 months. Review if the product page is still published, check search keyword impressions, or consider archiving it.`;
+        upsellRecommendation = `<strong>Clearance Promotion:</strong> Try bundling this dormant inventory with your top sellers to clear it out, or run a clearance sale.`;
+        redirectRecommendation = `<strong>Discontinued check:</strong> If this product is permanently unavailable, setup a 301 redirect to the nearest equivalent category page.`;
+    } else if (isSeasonalDip) {
+        seoRecommendation = `<strong>Seasonal Traffic Maintenance:</strong> Sales are dipping MoM but are stable YoY. Maintain page updates and continue targeting off-season search queries (e.g. winter chainsaw maintenance).`;
+        upsellRecommendation = `<strong>Off-Season Bundles:</strong> Offer special off-season discounts or pre-season service bundles to stimulate sales during slow months.`;
+        redirectRecommendation = `<strong>Stock Management:</strong> Prepare inventory levels in advance for the upcoming peak season based on last year's trends.`;
     }
 
     const getCheckKey = (sku, taskIdx) => `opt_chk_${sku}_${taskIdx}`;
