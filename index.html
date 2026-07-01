@@ -45,6 +45,7 @@
                 <button class="tab-btn" data-target="tab-customer">Customer Split</button>
                 <button class="tab-btn" data-target="tab-shipping">Shipping &amp; Delivery</button>
                 <button class="tab-btn" data-target="tab-product">Product Performance</button>
+                <button class="tab-btn" data-target="tab-productsales">Product Sales</button>
                 <button class="tab-btn" data-target="tab-category">Category Performance</button>
                 <button class="tab-btn" data-target="tab-categories">Categories</button>
                 <button class="tab-btn" data-target="tab-basket">Basket Analysis</button>
@@ -350,6 +351,90 @@
                         <h3 style="color: #EF4444;">&#x1F4C9; Falling Stars (Biggest Â£ Drops) <span class="info-tip" title="Products with the largest absolute revenue decrease between the previous month and the current month.">?</span></h3>
                         <div class="table-container" style="max-height: 400px; overflow-y: auto;">
                             <table class="data-table" id="productFallingStars"><thead><tr><th>SKU</th><th>Product</th><th>Prev Rev</th><th>Cur Rev</th><th>Â£ Change</th></tr></thead><tbody></tbody></table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 5: Product Sales -->
+            <section id="tab-productsales" class="tab-content">
+                <h2 class="section-title">Product Sales (Content &amp; Marketing Optimiser)</h2>
+                
+                <!-- Filters -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="dashboard-grid" style="grid-template-columns: 1.5fr 1.2fr 1fr 1fr 0.8fr; gap: 1rem; align-items: flex-end; margin-bottom: 0;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #475569;">Search Product</label>
+                            <input type="text" id="productSalesSearch" placeholder="Search by SKU or name..." style="width: 100%; padding: 0.5rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.875rem; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #475569;">Category</label>
+                            <select id="productSalesCategoryFilter" style="width: 100%; padding: 0.5rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.875rem; box-sizing: border-box; background: white;">
+                                <option value="">All Categories</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #475569;">Min Revenue (£)</label>
+                            <input type="number" id="productSalesMinRev" placeholder="e.g. 100" style="width: 100%; padding: 0.5rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.875rem; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #475569;">Min Units</label>
+                            <input type="number" id="productSalesMinUnits" placeholder="e.g. 5" style="width: 100%; padding: 0.5rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.875rem; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <button id="productSalesResetFilters" class="btn-secondary" style="width: 100%; padding: 0.5rem; border-radius: 6px; font-family: inherit; font-size: 0.875rem; border: none; cursor: pointer; transition: background 0.2s; height: 36px; line-height: 1;">Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Grid: Product Table and Trend Chart -->
+                <div class="dashboard-grid" style="grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <!-- Left: Table Card -->
+                    <div class="card" style="display: flex; flex-direction: column; margin-bottom: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <h3 class="product-category-heading" style="margin: 0;">Product Sales Catalogue</h3>
+                            <span style="font-size: 0.85rem; color: #64748B;">Click a row to load insights</span>
+                        </div>
+                        <div class="table-container" style="max-height: 550px; overflow-y: auto; flex-grow: 1;">
+                            <table class="data-table" id="productSalesTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 45px; text-align: center;">Rank</th>
+                                        <th style="cursor: pointer;" id="productSalesSortSku">SKU ↕</th>
+                                        <th style="cursor: pointer;" id="productSalesSortName">Product ↕</th>
+                                        <th>Category</th>
+                                        <th style="cursor: pointer; text-align: center;" id="productSalesSortUnits">Units ↕</th>
+                                        <th style="cursor: pointer; text-align: right;" id="productSalesSortRev">Revenue ↕</th>
+                                        <th style="text-align: right;">Avg Price</th>
+                                        <th style="text-align: right;">Share</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Right: Trend Chart Card -->
+                    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0;">
+                        <h3 class="product-category-heading" id="productSalesTrendTitle" style="margin-bottom: 1rem; width: 100%;">Product Sales Trend</h3>
+                        <div class="chart-container" style="height: 350px; flex-grow: 1; position: relative;">
+                            <canvas id="productSalesTrendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Optimiser insights card -->
+                <div class="card" style="border-top: 4px solid #009640;">
+                    <h3 class="product-category-heading" style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 3px solid #FFE600; padding-bottom: 0.5rem;">
+                        <span>💡</span> Content &amp; Marketing Optimiser Insights
+                    </h3>
+                    
+                    <div id="productSalesOptimiserContent">
+                        <!-- Populated dynamically when a product is clicked -->
+                        <div style="color: #64748B; text-align: center; padding: 2rem;">
+                            Select a product in the table above to view customized marketing and SEO optimization recommendations.
                         </div>
                     </div>
                 </div>

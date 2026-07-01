@@ -29,6 +29,7 @@ let productTableMonthA = "";
 let productTableMonthB = "";
 let categoryTableMonthA = "";
 let categoryTableMonthB = "";
+let selectedProductSalesSku = "";
 
 // Table sort state
 let productSortA = { col: 'revenue', dir: 'desc' };
@@ -548,6 +549,7 @@ function initTabs() {
             if (targetEl) {
                 targetEl.classList.add('active');
                 if (btn.getAttribute('data-target') === 'tab-data') updateDataStatusTab();
+                if (btn.getAttribute('data-target') === 'tab-productsales') updateProductSalesDashboard();
             }
         });
     });
@@ -847,6 +849,7 @@ function updateDashboards() {
         updateProductDashboard();
         updateCategoryDashboard();
         updateCategoryBrowser();
+        updateProductSalesDashboard();
     }
     if (appData.basket || appData.basketProject || appData.basketConsumables || appData.basketAnchors || appData.basketCrossCategory) {
         updateBasketDashboard();
@@ -1119,6 +1122,16 @@ async function exportFullReport() {
                 { id: 'productTableB', title: 'Top Performers (Month B)', desc: 'Ranked table of products by revenue for the second selected month, with MoM and YoY comparisons.' },
                 { id: 'productRisingStars', title: 'Rising Stars (Biggest £ Gains)', desc: 'Products with the largest absolute revenue increase between the previous month and the current month.' },
                 { id: 'productFallingStars', title: 'Falling Stars (Biggest £ Drops)', desc: 'Products with the largest absolute revenue decrease between the previous month and the current month.' }
+            ]
+        },
+        {
+            id: 'tab-productsales', name: 'Product Sales',
+            kpis: [],
+            charts: [
+                { id: 'productSalesTrendChart', title: 'Product Sales Trend', desc: 'Dual-axis line chart showing revenue and units sold for the selected product.' }
+            ],
+            tables: [
+                { id: 'productSalesTable', title: 'Product Sales Catalogue', desc: 'Ranked list of products sold over the selected date range, including units, revenue, and average unit price.' }
             ]
         },
         {
@@ -2669,3 +2682,445 @@ function exportFilteredCategories() {
     link.click();
     document.body.removeChild(link);
 }
+
+// ===== PRODUCT SALES OPTIMISER TAB SECTION =====
+let productSalesSortCol = "revenue"; 
+let productSalesSortDir = "desc";    
+
+function updateProductSalesDashboard() {
+    const data = appData.product;
+    if (!data || data.length === 0) return;
+
+    const months = getMonthsInRange();
+
+    // 1. Inputs
+    const searchInput = document.getElementById('productSalesSearch');
+    const categorySelect = document.getElementById('productSalesCategoryFilter');
+    const minRevInput = document.getElementById('productSalesMinRev');
+    const minUnitsInput = document.getElementById('productSalesMinUnits');
+    const resetBtn = document.getElementById('productSalesResetFilters');
+
+    if (!searchInput || !categorySelect) return;
+
+    // Get all unique categories for the dropdown filter (only run once)
+    if (!categorySelect.dataset.populated) {
+        let uniqueCats = new Set();
+        data.forEach(d => {
+            getCategoryNames(d).forEach(cat => {
+                if (cat) uniqueCats.add(cat);
+            });
+        });
+        
+        categorySelect.innerHTML = '<option value="">All Categories</option>';
+        Array.from(uniqueCats).sort().forEach(cat => {
+            let opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            categorySelect.appendChild(opt);
+        });
+        categorySelect.dataset.populated = "true";
+    }
+
+    // Reset filters handler
+    if (resetBtn && !resetBtn.dataset.bound) {
+        resetBtn.onclick = () => {
+            searchInput.value = "";
+            categorySelect.value = "";
+            minRevInput.value = "";
+            minUnitsInput.value = "";
+            updateProductSalesDashboard();
+        };
+        resetBtn.dataset.bound = "true";
+    }
+
+    // Input handlers
+    const retrigger = () => {
+        updateProductSalesDashboard();
+    };
+    if (!searchInput.dataset.bound) {
+        searchInput.oninput = retrigger;
+        categorySelect.onchange = retrigger;
+        minRevInput.oninput = retrigger;
+        minUnitsInput.oninput = retrigger;
+        searchInput.dataset.bound = "true";
+    }
+
+    // 2. Aggregate Data
+    let productStats = new Map(); // SKU -> { sku, name, category, totalUnits: 0, totalRev: 0, rows: [] }
+    let totalStoreRevenue = 0;
+
+    data.forEach(d => {
+        if (!d.SKU) return;
+        if (!months.includes(d['Reporting Month'])) return;
+        
+        let rev = Number(d['N. Revenue']) || 0;
+        let units = Number(d['Units']) || 0;
+        totalStoreRevenue += rev;
+
+        if (!productStats.has(d.SKU)) {
+            let cats = getCategoryNames(d);
+            let categoryName = cats.length > 0 ? cats[cats.length - 1] : "Uncategorized";
+            productStats.set(d.SKU, {
+                sku: d.SKU,
+                name: d['Product title'] || 'Unknown',
+                category: categoryName,
+                categories: cats,
+                totalUnits: 0,
+                totalRev: 0,
+                rows: []
+            });
+        }
+        let p = productStats.get(d.SKU);
+        p.totalUnits += units;
+        p.totalRev += rev;
+        p.rows.push(d);
+    });
+
+    // 3. Filter aggregated products
+    let filterKeyword = searchInput.value.toLowerCase().trim();
+    let filterCategory = categorySelect.value;
+    let minRev = parseFloat(minRevInput.value) || 0;
+    let minUnits = parseFloat(minUnitsInput.value) || 0;
+
+    let filteredProducts = [];
+    productStats.forEach(p => {
+        if (filterKeyword && !p.sku.toLowerCase().includes(filterKeyword) && !p.name.toLowerCase().includes(filterKeyword)) {
+            return;
+        }
+        if (filterCategory && !p.categories.includes(filterCategory)) {
+            return;
+        }
+        if (p.totalRev < minRev) return;
+        if (p.totalUnits < minUnits) return;
+
+        filteredProducts.push(p);
+    });
+
+    // 4. Sort products
+    filteredProducts.sort((a, b) => {
+        let valA, valB;
+        if (productSalesSortCol === 'sku') {
+            valA = a.sku; valB = b.sku;
+        } else if (productSalesSortCol === 'name') {
+            valA = a.name; valB = b.name;
+        } else if (productSalesSortCol === 'units') {
+            valA = a.totalUnits; valB = b.totalUnits;
+        } else {
+            valA = a.totalRev; valB = b.totalRev;
+        }
+
+        if (typeof valA === 'string') {
+            return productSalesSortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else {
+            return productSalesSortDir === 'asc' ? valA - valB : valB - valA;
+        }
+    });
+
+    window.lastFilteredSalesProducts = filteredProducts;
+
+    // 5. Select default product if none selected or if selected is not in filtered list
+    if (!selectedProductSalesSku || !productStats.has(selectedProductSalesSku)) {
+        if (filteredProducts.length > 0) {
+            selectedProductSalesSku = filteredProducts[0].sku;
+        } else {
+            selectedProductSalesSku = "";
+        }
+    }
+
+    // 6. Bind sort headers click events
+    const bindSort = (id, colName) => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.bound) {
+            el.onclick = () => {
+                if (productSalesSortCol === colName) {
+                    productSalesSortDir = productSalesSortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    productSalesSortCol = colName;
+                    productSalesSortDir = 'desc';
+                }
+                updateSortHeaderSymbols();
+                updateProductSalesDashboard();
+            };
+            el.dataset.bound = "true";
+        }
+    };
+    bindSort('productSalesSortSku', 'sku');
+    bindSort('productSalesSortName', 'name');
+    bindSort('productSalesSortUnits', 'units');
+    bindSort('productSalesSortRev', 'revenue');
+
+    const updateSortHeaderSymbols = () => {
+        const cols = { sku: 'productSalesSortSku', name: 'productSalesSortName', units: 'productSalesSortUnits', revenue: 'productSalesSortRev' };
+        for (const [col, id] of Object.entries(cols)) {
+            const el = document.getElementById(id);
+            if (el) {
+                let base = el.textContent.split(' ')[0];
+                if (productSalesSortCol === col) {
+                    el.textContent = base + (productSalesSortDir === 'asc' ? ' ▲' : ' ▼');
+                } else {
+                    el.textContent = base + ' ↕';
+                }
+            }
+        }
+    };
+
+    // 7. Render Table
+    const tbody = document.querySelector('#productSalesTable tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        if (filteredProducts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#64748B; padding:2rem;">No products match current filters.</td></tr>';
+        } else {
+            filteredProducts.forEach((p, idx) => {
+                let tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                if (p.sku === selectedProductSalesSku) {
+                    tr.classList.add('active-row');
+                }
+
+                let avgPrice = p.totalUnits > 0 ? (p.totalRev / p.totalUnits) : 0;
+                let share = totalStoreRevenue > 0 ? ((p.totalRev * 100) / totalStoreRevenue).toFixed(2) + '%' : '0%';
+
+                tr.innerHTML = `
+                    <td style="text-align: center; color: #64748B;">${idx + 1}</td>
+                    <td style="font-weight: 600;">${p.sku}</td>
+                    <td style="font-weight: 500;">${p.name}</td>
+                    <td style="color: #64748B; font-size: 0.85rem;">${p.category}</td>
+                    <td style="text-align: center; font-weight: 600;">${formatWholeNumber(p.totalUnits)}</td>
+                    <td style="text-align: right; font-weight: 600; color: #009640;">${formatCurrency(p.totalRev)}</td>
+                    <td style="text-align: right; color: #475569;">${formatCurrency(avgPrice)}</td>
+                    <td style="text-align: right; color: #475569; font-weight: 500;">${share}</td>
+                `;
+
+                tr.onclick = () => {
+                    selectedProductSalesSku = p.sku;
+                    updateProductSalesDashboard();
+                };
+
+                tbody.appendChild(tr);
+            });
+        }
+    }
+
+    // 8. Render trend chart for selected product
+    if (selectedProductSalesSku && productStats.has(selectedProductSalesSku)) {
+        const selectedProduct = productStats.get(selectedProductSalesSku);
+        renderProductSalesTrendChart(selectedProduct);
+        renderProductSalesOptimiser(selectedProduct, totalStoreRevenue, months);
+    } else {
+        if (window.productSalesTrendChart instanceof Chart) {
+            window.productSalesTrendChart.destroy();
+        }
+        const optContent = document.getElementById('productSalesOptimiserContent');
+        if (optContent) {
+            optContent.innerHTML = '<div style="color: #64748B; text-align: center; padding: 2rem;">No product selected.</div>';
+        }
+        const titleEl = document.getElementById('productSalesTrendTitle');
+        if (titleEl) titleEl.textContent = 'Product Sales Trend';
+    }
+}
+
+function renderProductSalesTrendChart(product) {
+    const titleEl = document.getElementById('productSalesTrendTitle');
+    if (titleEl) {
+        titleEl.textContent = `Trend: [${product.sku}] ${product.name}`;
+    }
+
+    const months = getMonthsInRange();
+    
+    let revData = [];
+    let unitsData = [];
+
+    months.forEach(m => {
+        let match = product.rows.find(r => r['Reporting Month'] === m);
+        if (match) {
+            revData.push(Number(match['N. Revenue']) || 0);
+            unitsData.push(Number(match['Units']) || 0);
+        } else {
+            revData.push(0);
+            unitsData.push(0);
+        }
+    });
+
+    renderMultiLineChart('productSalesTrendChart', months.map(formatMonthLabel), [
+        { label: 'Net Revenue (£)', data: revData, color: '#009640', yAxisID: 'y' },
+        { label: 'Units Sold', data: unitsData, color: '#8B5CF6', yAxisID: 'y1' }
+    ]);
+}
+
+function renderProductSalesOptimiser(product, totalStoreRevenue, months) {
+    const container = document.getElementById('productSalesOptimiserContent');
+    if (!container) return;
+
+    let totalRev = product.totalRev;
+    let totalUnits = product.totalUnits;
+    let avgPrice = totalUnits > 0 ? (totalRev / totalUnits) : 0;
+    let revShare = totalStoreRevenue > 0 ? (totalRev / totalStoreRevenue * 100) : 0;
+
+    let halfIndex = Math.floor(months.length / 2);
+    let olderMonths = months.slice(0, halfIndex);
+    let newerMonths = months.slice(halfIndex);
+
+    let olderRev = product.rows.filter(r => olderMonths.includes(r['Reporting Month'])).reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
+    let newerRev = product.rows.filter(r => newerMonths.includes(r['Reporting Month'])).reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
+
+    let olderAvg = olderMonths.length > 0 ? (olderRev / olderMonths.length) : 0;
+    let newerAvg = newerMonths.length > 0 ? (newerRev / newerMonths.length) : 0;
+
+    let trendText = "";
+    let trendColor = "#373737";
+    let pctChange = 0;
+    if (olderAvg > 0) {
+        pctChange = ((newerAvg - olderAvg) / olderAvg) * 100;
+        if (pctChange > 5) {
+            trendText = `Growing (+${Math.round(pctChange)}%)`;
+            trendColor = "#009640";
+        } else if (pctChange < -5) {
+            trendText = `Declining (${Math.round(pctChange)}%)`;
+            trendColor = "#EF4444";
+        } else {
+            trendText = `Stable (No change)`;
+            trendColor = "#475569";
+        }
+    } else {
+        if (newerAvg > 0) {
+            trendText = `Emerging (New)`;
+            trendColor = "#3B82F6";
+        } else {
+            trendText = `No Sales`;
+            trendColor = "#64748B";
+        }
+    }
+
+    let segmentTitle = "Standard Optimization";
+    let segmentBadge = `<span style="background: #F1F5F9; color: #475569; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem;">Standard Priority</span>`;
+    let seoRecommendation = `Create standard descriptive product copy and make sure the SKU is searchable in search engines.`;
+    let upsellRecommendation = `Add simple related product links or bundles at checkout to encourage multi-item purchases.`;
+    let redirectRecommendation = `Regularly check stock levels to avoid 'out of stock' bounces on search engines.`;
+
+    if (revShare >= 1.0) {
+        segmentTitle = "High-Impact Revenue Driver";
+        segmentBadge = `<span style="background: #FEF3C7; color: #D97706; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #FDE68A;">🔥 High SEO Priority</span>`;
+        seoRecommendation = `<strong>Write target blog guides:</strong> Since this product represents a massive <strong>${revShare.toFixed(2)}%</strong> of your revenue, write dedicated blogs (e.g. buying guides, installation tutorials) and link directly back to this product page. This will drive maximum organic traffic.`;
+        upsellRecommendation = `<strong>Premium Upsells:</strong> Target this product page for high-margin accessory cross-sells. Offer small discounts if they add compatible accessories directly from this page.`;
+        redirectRecommendation = `<strong>Alternative fallback:</strong> In case this high-value model goes out of stock, create a clear highlighted banner linking to a newer model or direct equivalent to retain the buyer.`;
+    } else if (avgPrice < 25 && totalUnits >= 15) {
+        segmentTitle = "High-Volume Catalog Driver";
+        segmentBadge = `<span style="background: #E0F2FE; color: #0369A1; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #BAE6FD;">🛒 Cross-Sell Focus</span>`;
+        seoRecommendation = `<strong>Internal Link Building:</strong> Add internal anchor text from your main category pages and blog index pointing to this page to solidify its positioning as an affordable entry point.`;
+        upsellRecommendation = `<strong>Cart Builder / Bundling:</strong> Since this item has a low unit price (${formatCurrency(avgPrice)}) but sells frequently, bundle it with accessories (e.g. buy 3, get 10% off) to drive up your AOV.`;
+        redirectRecommendation = `<strong>Premium Upsell Redirection:</strong> Place a clear comparison matrix on the product page showing this entry model next to a premium, higher-margin alternative.`;
+    } else if (pctChange < -10) {
+        segmentTitle = "Declining Sales Recovery";
+        segmentBadge = `<span style="background: #FEE2E2; color: #991B1B; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #FCA5A5;">⚠️ Underperforming</span>`;
+        seoRecommendation = `<strong>Content Refresh:</strong> Refresh the product title, features, and metadata. Add common customer questions directly to the product description to target fresh search queries.`;
+        upsellRecommendation = `<strong>Promo Campaign:</strong> Run a limited-time bundle discount or coupon code specifically targeting this item to restart sales momentum.`;
+        redirectRecommendation = `<strong>Alternative Promotion:</strong> If there is a newer, better model or if this product is discontinued, insert a permanent alert at the top of the description directing users to the newer alternative.`;
+    } else if (pctChange > 10) {
+        segmentTitle = "Rising Momentum Product";
+        segmentBadge = `<span style="background: #DCFCE7; color: #166534; padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #BBF7D0;">📈 Rising Star</span>`;
+        seoRecommendation = `<strong>Feature on Homepage / Newsletter:</strong> Capitalize on this growing product's momentum. Write a quick feature post or showcase it in the next marketing email.`;
+        upsellRecommendation = `<strong>Configure Accessories:</strong> As demand rises, ensure all relevant accessories and cleaning kits are configured as cross-sells in WooCommerce to capitalize on cart size.`;
+        redirectRecommendation = `<strong>Stock Alerts:</strong> With growing velocity, double-check inventory levels with supplier to ensure stock is maintained.`;
+    }
+
+    const getCheckKey = (sku, taskIdx) => `opt_chk_${sku}_${taskIdx}`;
+    
+    const tasks = [
+        `Write/refresh blog content & add links back to this product page.`,
+        `Add cross-sell accessories / add-ons in WooCommerce product settings.`,
+        `Insert a premium banner linking to a newer model / alternative.`,
+        `Inspect product image quality and customer reviews to optimize conversion rates.`
+    ];
+
+    let checklistHtml = '';
+    tasks.forEach((task, idx) => {
+        let key = getCheckKey(product.sku, idx);
+        let checked = localStorage.getItem(key) === 'true' ? 'checked' : '';
+        checklistHtml += `
+            <div style="display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; transition: background 0.2s;">
+                <input type="checkbox" id="${key}" ${checked} style="margin-top: 0.25rem; cursor: pointer;" onchange="localStorage.setItem('${key}', this.checked)">
+                <label for="${key}" style="font-size: 0.9rem; color: #373737; cursor: pointer; line-height: 1.4;">${task}</label>
+            </div>
+        `;
+    });
+
+    container.innerHTML = `
+        <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 0;">
+            <div>
+                <h4 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: #1E293B; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem;">
+                    <span>📊</span> Diagnostic Summary
+                </h4>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 0.75rem;">
+                        <span style="font-size: 0.75rem; color: #64748B; font-weight: 600; text-transform: uppercase;">Average Price</span>
+                        <span style="display: block; font-size: 1.25rem; font-weight: 700; color: #373737; margin-top: 0.25rem;">${formatCurrency(avgPrice)}</span>
+                    </div>
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 0.75rem;">
+                        <span style="font-size: 0.75rem; color: #64748B; font-weight: 600; text-transform: uppercase;">Sales Trend</span>
+                        <span style="display: block; font-size: 1.15rem; font-weight: 700; color: ${trendColor}; margin-top: 0.25rem;">${trendText}</span>
+                    </div>
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 0.75rem;">
+                        <span style="font-size: 0.75rem; color: #64748B; font-weight: 600; text-transform: uppercase;">Revenue Share</span>
+                        <span style="display: block; font-size: 1.25rem; font-weight: 700; color: #373737; margin-top: 0.25rem;">${revShare.toFixed(2)}%</span>
+                    </div>
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 0.75rem;">
+                        <span style="font-size: 0.75rem; color: #64748B; font-weight: 600; text-transform: uppercase;">Segment Tag</span>
+                        <span style="display: block; margin-top: 0.35rem;">${segmentBadge}</span>
+                    </div>
+                </div>
+
+                <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 1rem; border-left: 4px solid #D97706;">
+                    <h5 style="font-weight: 700; font-size: 0.85rem; color: #92400E; margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em;">Actionable Summary</h5>
+                    <p style="font-size: 0.875rem; color: #78350F; margin: 0; line-height: 1.5;">
+                        This product is classified as a <strong>${segmentTitle}</strong>. 
+                        To maximize profit, prioritize adding internal SEO links and configuring WooCommerce cross-sells.
+                    </p>
+                </div>
+            </div>
+
+            <div>
+                <h4 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: #1E293B; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem;">
+                    <span>⚙️</span> Recommended Optimization Steps
+                </h4>
+
+                <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                        <span style="font-size: 1.25rem;">📝</span>
+                        <div>
+                            <span style="font-weight: 600; font-size: 0.875rem; color: #475569; display: block;">SEO &amp; Content Strategy</span>
+                            <p style="font-size: 0.875rem; color: #373737; margin: 0.2rem 0 0 0; line-height: 1.4;">${seoRecommendation}</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                        <span style="font-size: 1.25rem;">🛒</span>
+                        <div>
+                            <span style="font-weight: 600; font-size: 0.875rem; color: #475569; display: block;">Upsells &amp; Cross-Sells</span>
+                            <p style="font-size: 0.875rem; color: #373737; margin: 0.2rem 0 0 0; line-height: 1.4;">${upsellRecommendation}</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                        <span style="font-size: 1.25rem;">🔄</span>
+                        <div>
+                            <span style="font-weight: 600; font-size: 0.875rem; color: #475569; display: block;">Alternative / Redirection Banners</span>
+                            <p style="font-size: 0.875rem; color: #373737; margin: 0.2rem 0 0 0; line-height: 1.4;">${redirectRecommendation}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem;">
+                    <h5 style="font-weight: 700; font-size: 0.85rem; color: #475569; margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Merchant Checklist</span>
+                        <span style="font-size: 0.75rem; font-weight: normal; text-transform: none; color: #64748B;">Auto-saved locally</span>
+                    </h5>
+                    
+                    <div style="display: flex; flex-direction: column;">
+                        ${checklistHtml}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+

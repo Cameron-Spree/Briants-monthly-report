@@ -407,3 +407,9 @@ p {
     vertical-align: middle;
     margin-left: 4px;
 }
+
+.active-row td {
+    background-color: #E2E8F0 !important;
+    font-weight: 600;
+}
+
