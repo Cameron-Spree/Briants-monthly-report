@@ -765,6 +765,23 @@ function getYoyMonth(ym) {
     return (y-1) + '-' + m.toString().padStart(2,'0');
 }
 
+function getProductKey(row) {
+    if (!row) return 'Unknown';
+    let sku = row.SKU;
+    if (!sku || sku === "" || sku.toLowerCase() === "null") {
+        return "NO_SKU_" + (row['Product title'] || 'Unknown').trim();
+    }
+    return sku.trim();
+}
+
+function getDisplaySku(sku) {
+    if (!sku || sku === "" || sku.toLowerCase() === "null" || sku.startsWith("NO_SKU_")) {
+        return "NULL";
+    }
+    return sku.trim();
+}
+
+
 function getCategoryNames(row) {
     if (!row || !row.Category) return [];
     const categorySet = new Set();
@@ -1624,14 +1641,14 @@ function updateProductDashboard() {
     const maxUnitsInput = document.getElementById('productMaxUnits');
     
     if (selector && searchInput) {
-        let productStats = new Map(); // sku -> { name, totalRev, totalUnits }
+        let productStats = new Map(); // key -> { name, totalRev, totalUnits }
         data.forEach(d => {
-            if (!d.SKU) return;
             if (!months.includes(d['Reporting Month'])) return;
-            if (!productStats.has(d.SKU)) {
-                productStats.set(d.SKU, { name: d['Product title'], totalRev: 0, totalUnits: 0 });
+            let key = getProductKey(d);
+            if (!productStats.has(key)) {
+                productStats.set(key, { name: d['Product title'] || 'Unknown', totalRev: 0, totalUnits: 0 });
             }
-            let s = productStats.get(d.SKU);
+            let s = productStats.get(key);
             s.totalRev += (Number(d['N. Revenue']) || 0);
             s.totalUnits += (Number(d['Units']) || 0);
         });
@@ -1647,18 +1664,19 @@ function updateProductDashboard() {
             selector.innerHTML = '<option value="__ALL__">All Products (Total Revenue)</option>';
             window.lastFilteredProducts = [];
             
-            Array.from(productStats.keys()).sort().forEach(sku => {
-                let stats = productStats.get(sku);
-                let text = '[' + sku + '] ' + stats.name;
+            Array.from(productStats.keys()).sort().forEach(key => {
+                let stats = productStats.get(key);
+                let displaySku = getDisplaySku(key);
+                let text = '[' + displaySku + '] ' + stats.name;
                 
                 if (filter && !text.toLowerCase().includes(filter)) return;
                 if (stats.totalRev < minRev || stats.totalRev > maxRev) return;
                 if (stats.totalUnits < minUnits || stats.totalUnits > maxUnits) return;
                 
-                window.lastFilteredProducts.push({ sku, name: stats.name, totalRev: stats.totalRev, totalUnits: stats.totalUnits });
+                window.lastFilteredProducts.push({ sku: displaySku, name: stats.name, totalRev: stats.totalRev, totalUnits: stats.totalUnits });
                 
                 let opt = document.createElement('option');
-                opt.value = sku;
+                opt.value = key;
                 opt.textContent = text;
                 selector.appendChild(opt);
             });
@@ -1717,17 +1735,17 @@ function updateProductDashboard() {
     }
 }
 
-function renderProductTrendChart(sku, data, months) {
+function renderProductTrendChart(skuKey, data, months) {
     let filteredRows;
     let chartData;
-    if (sku === '__ALL__') {
+    if (skuKey === '__ALL__') {
         filteredRows = data.filter(d => months.includes(d['Reporting Month']));
         chartData = months.map(m => data.filter(d => d['Reporting Month'] === m).reduce((s, d) => s + (d['N. Revenue'] || 0), 0));
     } else {
-        filteredRows = data.filter(d => months.includes(d['Reporting Month']) && d.SKU === sku);
+        filteredRows = data.filter(d => months.includes(d['Reporting Month']) && getProductKey(d) === skuKey);
         chartData = months.map(m => {
             return data
-                .filter(d => d['Reporting Month'] === m && d.SKU === sku)
+                .filter(d => d['Reporting Month'] === m && getProductKey(d) === skuKey)
                 .reduce((s, d) => s + (d['N. Revenue'] || 0), 0);
         });
     }
@@ -1747,13 +1765,14 @@ function renderProductTable(tableId, filterId, targetMonth, data, sortState, sid
     const yoyData = data.filter(d => d['Reporting Month'] === yoy);
     
     let rows = curData.map(r => {
-        let pRow = prevData.find(p => p.SKU === r.SKU) || {};
-        let yRow = yoyData.find(y => y.SKU === r.SKU) || {};
+        let rKey = getProductKey(r);
+        let pRow = prevData.find(p => getProductKey(p) === rKey) || {};
+        let yRow = yoyData.find(y => getProductKey(y) === rKey) || {};
         let pRev = pRow['N. Revenue'] || 0;
         let yRev = yRow['N. Revenue'] || 0;
         let curRev = r['N. Revenue'] || 0;
         return {
-            sku: r.SKU || '', name: r['Product title'] || '',
+            sku: getDisplaySku(r.SKU), name: r['Product title'] || '',
             units: r['Units'] || 0, revenue: curRev,
             prevMom: pRev > 0 ? ((curRev - pRev) / pRev) * 100 : 0,
             yoy: yRev > 0 ? ((curRev - yRev) / yRev) * 100 : 0
@@ -2587,14 +2606,16 @@ function renderRisingFallingStars(type, month, prevMonth, data, risingTableId, f
     
     if (type === 'product') {
         data.filter(d => d['Reporting Month'] === month).forEach(d => {
-            if (!d.SKU) return;
-            if (!stats[d.SKU]) stats[d.SKU] = { name: d['Product title'], curRev: 0, prevRev: 0, sku: d.SKU };
-            stats[d.SKU].curRev += (d['N. Revenue'] || 0);
+            let key = getProductKey(d);
+            let displaySku = getDisplaySku(d.SKU);
+            if (!stats[key]) stats[key] = { name: d['Product title'] || 'Unknown', curRev: 0, prevRev: 0, sku: displaySku };
+            stats[key].curRev += (d['N. Revenue'] || 0);
         });
         data.filter(d => d['Reporting Month'] === prevMonth).forEach(d => {
-            if (!d.SKU) return;
-            if (!stats[d.SKU]) stats[d.SKU] = { name: d['Product title'], curRev: 0, prevRev: 0, sku: d.SKU };
-            stats[d.SKU].prevRev += (d['N. Revenue'] || 0);
+            let key = getProductKey(d);
+            let displaySku = getDisplaySku(d.SKU);
+            if (!stats[key]) stats[key] = { name: d['Product title'] || 'Unknown', curRev: 0, prevRev: 0, sku: displaySku };
+            stats[key].prevRev += (d['N. Revenue'] || 0);
         });
     } else {
         data.filter(d => d['Reporting Month'] === month).forEach(d => {
@@ -2893,26 +2914,26 @@ function updateProductSalesDashboard() {
     // 2. Compute Total Catalog Revenue (for share calculation)
     let totalStoreRevenue = 0;
     data.forEach(d => {
-        if (!d.SKU) return;
         if (!months.includes(d['Reporting Month'])) return;
         totalStoreRevenue += (Number(d['N. Revenue']) || 0);
     });
 
     // 3. Aggregate Data
-    let productStats = new Map(); // SKU -> { sku, name, category, totalUnits: 0, totalRev: 0, rows: [] }
+    let productStats = new Map(); // Key -> { sku, key, name, category, totalUnits: 0, totalRev: 0, rows: [] }
 
     data.forEach(d => {
-        if (!d.SKU) return;
         if (!months.includes(d['Reporting Month'])) return;
         
         let rev = Number(d['N. Revenue']) || 0;
         let units = Number(d['Units']) || 0;
 
-        if (!productStats.has(d.SKU)) {
+        let key = getProductKey(d);
+        if (!productStats.has(key)) {
             let cats = getCategoryNames(d);
             let categoryName = cats.length > 0 ? cats[cats.length - 1] : "Uncategorized";
-            productStats.set(d.SKU, {
-                sku: d.SKU,
+            productStats.set(key, {
+                sku: getDisplaySku(d.SKU),
+                key: key,
                 name: d['Product title'] || 'Unknown',
                 category: categoryName,
                 categories: cats,
@@ -2921,7 +2942,7 @@ function updateProductSalesDashboard() {
                 rows: []
             });
         }
-        let p = productStats.get(d.SKU);
+        let p = productStats.get(key);
         p.totalUnits += units;
         p.totalRev += rev;
         p.rows.push(d);
@@ -2941,7 +2962,7 @@ function updateProductSalesDashboard() {
 
     let filteredProducts = [];
     productStats.forEach(p => {
-        if (filterKeyword && !p.sku.toLowerCase().includes(filterKeyword) && !p.name.toLowerCase().includes(filterKeyword)) {
+        if (filterKeyword && !p.key.toLowerCase().includes(filterKeyword) && !p.name.toLowerCase().includes(filterKeyword)) {
             return;
         }
         if (filterCategory && !p.categories.includes(filterCategory)) {
@@ -2981,7 +3002,7 @@ function updateProductSalesDashboard() {
     // 6. Select default product if none selected or if selected is not in filtered list
     if (!selectedProductSalesSku || !productStats.has(selectedProductSalesSku)) {
         if (filteredProducts.length > 0) {
-            selectedProductSalesSku = filteredProducts[0].sku;
+            selectedProductSalesSku = filteredProducts[0].key;
         } else {
             selectedProductSalesSku = "";
         }
@@ -3034,7 +3055,7 @@ function updateProductSalesDashboard() {
             filteredProducts.forEach((p, idx) => {
                 let tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
-                if (p.sku === selectedProductSalesSku) {
+                if (p.key === selectedProductSalesSku) {
                     tr.classList.add('active-row');
                 }
 
@@ -3053,7 +3074,7 @@ function updateProductSalesDashboard() {
                 `;
 
                 tr.onclick = () => {
-                    selectedProductSalesSku = p.sku;
+                    selectedProductSalesSku = p.key;
                     const toggleSalesRev = document.getElementById('toggleSalesRev');
                     const toggleSalesUnits = document.getElementById('toggleSalesUnits');
                     if (toggleSalesRev) toggleSalesRev.checked = true;
@@ -3163,7 +3184,7 @@ function renderProductSalesOptimiser(product) {
         redirectRecommendation = `<strong>Stock Management:</strong> Prepare inventory levels in advance for the upcoming peak season based on last year's trends.`;
     }
 
-    const getCheckKey = (sku, taskIdx) => `opt_chk_${sku}_${taskIdx}`;
+    const getCheckKey = (key, taskIdx) => `opt_chk_${key.replace(/[^a-zA-Z0-9]/g, '_')}_${taskIdx}`;
     
     const tasks = [
         `Write/refresh blog content & add links back to this product page.`,
@@ -3174,7 +3195,7 @@ function renderProductSalesOptimiser(product) {
 
     let checklistHtml = '';
     tasks.forEach((task, idx) => {
-        let key = getCheckKey(product.sku, idx);
+        let key = getCheckKey(product.key, idx);
         let checked = localStorage.getItem(key) === 'true' ? 'checked' : '';
         checklistHtml += `
             <div style="display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; transition: background 0.2s;">
@@ -3262,4 +3283,3 @@ function renderProductSalesOptimiser(product) {
         </div>
     `;
 }
-
