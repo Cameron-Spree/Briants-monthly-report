@@ -2894,6 +2894,10 @@ function updateProductSalesDashboard() {
 
                 tr.onclick = () => {
                     selectedProductSalesSku = p.sku;
+                    const toggleSalesRev = document.getElementById('toggleSalesRev');
+                    const toggleSalesUnits = document.getElementById('toggleSalesUnits');
+                    if (toggleSalesRev) toggleSalesRev.checked = true;
+                    if (toggleSalesUnits) toggleSalesUnits.checked = true;
                     updateProductSalesDashboard();
                 };
 
@@ -2946,6 +2950,13 @@ function renderProductSalesTrendChart(product) {
         { label: 'Net Revenue (£)', data: revData, color: '#009640', yAxisID: 'y' },
         { label: 'Units Sold', data: unitsData, color: '#8B5CF6', yAxisID: 'y1' }
     ]);
+}
+
+function toggleProductSalesDataset(datasetIndex, visible) {
+    if (window.productSalesTrendChart instanceof Chart) {
+        window.productSalesTrendChart.setDatasetVisibility(datasetIndex, visible);
+        window.productSalesTrendChart.update();
+    }
 }
 
 function renderProductSalesOptimiser(product, totalStoreRevenue, months) {

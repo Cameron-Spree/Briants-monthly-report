@@ -418,7 +418,17 @@
 
                     <!-- Right: Trend Chart Card -->
                     <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0;">
-                        <h3 class="product-category-heading" id="productSalesTrendTitle" style="margin-bottom: 1rem; width: 100%;">Product Sales Trend</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <h3 class="product-category-heading" id="productSalesTrendTitle" style="margin-bottom: 0; display: inline-block;">Product Sales Trend</h3>
+                            <div style="display: flex; gap: 0.75rem; font-size: 0.85rem; align-items: center;">
+                                <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; color: #009640; font-weight: 600;">
+                                    <input type="checkbox" id="toggleSalesRev" checked onchange="toggleProductSalesDataset(0, this.checked)"> Revenue
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; color: #8B5CF6; font-weight: 600;">
+                                    <input type="checkbox" id="toggleSalesUnits" checked onchange="toggleProductSalesDataset(1, this.checked)"> Units
+                                </label>
+                            </div>
+                        </div>
                         <div class="chart-container" style="height: 350px; flex-grow: 1; position: relative;">
                             <canvas id="productSalesTrendChart"></canvas>
                         </div>
