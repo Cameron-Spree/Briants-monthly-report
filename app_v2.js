@@ -1820,8 +1820,8 @@ function renderProductVarianceEngine(data) {
     setElementText('hdrDropB', lblB);
     setElementText('hdrGainA', lblA);
     setElementText('hdrGainB', lblB);
-    setElementText('hdrTableA', lblA + ' Rev (Qty)');
-    setElementText('hdrTableB', lblB + ' Rev (Qty)');
+    setElementText('hdrTableA', lblA + ' Rev Ex VAT (Qty)');
+    setElementText('hdrTableB', lblB + ' Rev Ex VAT (Qty)');
 
     // 1. Group by Product Key
     let productMap = new Map();

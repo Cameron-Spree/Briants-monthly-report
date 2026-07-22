@@ -245,6 +245,10 @@
             <section id="tab-product" class="tab-content">
                 <h2 class="section-title">Product &amp; Category Performance (Variance Engine)</h2>
                 
+                <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px; padding: 0.6rem 1rem; margin-bottom: 1.25rem; color: #166534; font-size: 0.85rem; line-height: 1.4;">
+                    ℹ️ <strong>Pricing &amp; Revenue Note:</strong> All revenue figures, unit prices, and net totals throughout this dashboard are <strong>Net Revenue EXCLUDING VAT (Ex VAT)</strong> after line discounts. UK website retail list prices include 20% VAT (Inc VAT).
+                </div>
+
                 <!-- Comparison Control & Headline KPI Card -->
                 <div class="card" style="margin-bottom: 1.5rem; border-top: 4px solid #009640;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
@@ -278,15 +282,15 @@
                     <!-- Headline Summary Grid -->
                     <div class="trend-summary-grid">
                         <div class="trend-summary-card" style="border-left: 3px solid #009640;">
-                            <span class="trend-summary-label" id="productCompLabelA">Primary Month (A) Rev</span>
+                            <span class="trend-summary-label" id="productCompLabelA">Primary Month (A) Rev (Ex VAT)</span>
                             <strong class="trend-summary-value" id="productCompRevA">--</strong>
                         </div>
                         <div class="trend-summary-card" style="border-left: 3px solid #64748B;">
-                            <span class="trend-summary-label" id="productCompLabelB">Comparison Target (B) Rev</span>
+                            <span class="trend-summary-label" id="productCompLabelB">Comparison Target (B) Rev (Ex VAT)</span>
                             <strong class="trend-summary-value" id="productCompRevB">--</strong>
                         </div>
                         <div class="trend-summary-card" id="productCompVarianceCard" style="border-left: 3px solid #373737;">
-                            <span class="trend-summary-label">Net Variance (£)</span>
+                            <span class="trend-summary-label">Net Variance (£ Ex VAT)</span>
                             <strong class="trend-summary-value" id="productCompVarianceDiff">--</strong>
                         </div>
                         <div class="trend-summary-card" id="productCompPctCard" style="border-left: 3px solid #373737;">
@@ -315,7 +319,7 @@
                         <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem;">
                             <h4 style="font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between;">
                                 <span>Category Impact Breakdown</span>
-                                <span style="font-size: 0.75rem; color: #64748B; font-weight: normal;">Net £ Change</span>
+                                <span style="font-size: 0.75rem; color: #64748B; font-weight: normal;">Net £ Change (Ex VAT)</span>
                             </h4>
                             <div id="productCategoryVarianceList" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
                                 <!-- Dynamically populated -->
@@ -330,7 +334,7 @@
                     <div class="card" style="border-top: 4px solid #EF4444; margin-bottom: 0;">
                         <h3 style="color: #DC2626; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
                             <span>📉</span> Top Revenue Drops (The Losers)
-                            <span class="info-tip" title="Products with the largest absolute revenue loss (£) in Month A compared to Month B.">?</span>
+                            <span class="info-tip" title="Products with the largest absolute revenue loss (£ Ex VAT) in Month A compared to Month B.">?</span>
                         </h3>
                         <div class="table-container" style="max-height: 400px; overflow-y: auto;">
                             <table class="data-table" id="productTopDropsTable">
@@ -341,7 +345,7 @@
                                         <th>Category</th>
                                         <th style="text-align: right;" id="hdrDropB">Month B</th>
                                         <th style="text-align: right;" id="hdrDropA">Month A</th>
-                                        <th style="text-align: right;">£ Drop</th>
+                                        <th style="text-align: right;">£ Drop (Ex VAT)</th>
                                         <th style="text-align: right;">% Change</th>
                                     </tr>
                                 </thead>
@@ -354,7 +358,7 @@
                     <div class="card" style="border-top: 4px solid #009640; margin-bottom: 0;">
                         <h3 style="color: #009640; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
                             <span>📈</span> Top Revenue Gains (The Winners)
-                            <span class="info-tip" title="Products with the largest absolute revenue gain (£) in Month A compared to Month B.">?</span>
+                            <span class="info-tip" title="Products with the largest absolute revenue gain (£ Ex VAT) in Month A compared to Month B.">?</span>
                         </h3>
                         <div class="table-container" style="max-height: 400px; overflow-y: auto;">
                             <table class="data-table" id="productTopGainsTable">
@@ -365,7 +369,7 @@
                                         <th>Category</th>
                                         <th style="text-align: right;" id="hdrGainB">Month B</th>
                                         <th style="text-align: right;" id="hdrGainA">Month A</th>
-                                        <th style="text-align: right;">£ Gain</th>
+                                        <th style="text-align: right;">£ Gain (Ex VAT)</th>
                                         <th style="text-align: right;">% Change</th>
                                     </tr>
                                 </thead>
@@ -380,7 +384,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                         <div>
                             <h3 class="product-category-heading" style="margin: 0;">Complete Product Comparison Table</h3>
-                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Detailed product-by-product comparison between Month A and Month B.</p>
+                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Detailed product-by-product net revenue comparison (Ex VAT) between Month A and Month B.</p>
                         </div>
 
                         <!-- Filters for Table -->
@@ -406,9 +410,9 @@
                                     <th style="cursor: pointer;" id="productCompSortSku">SKU ↕</th>
                                     <th style="cursor: pointer;" id="productCompSortName">Product Name ↕</th>
                                     <th>Category</th>
-                                    <th style="text-align: right;" id="hdrTableB">Month B Rev (Units)</th>
-                                    <th style="text-align: right;" id="hdrTableA">Month A Rev (Units)</th>
-                                    <th style="cursor: pointer; text-align: right;" id="productCompSortDiff">£ Variance ↕</th>
+                                    <th style="text-align: right;" id="hdrTableB">Month B Rev Ex VAT (Qty)</th>
+                                    <th style="text-align: right;" id="hdrTableA">Month A Rev Ex VAT (Qty)</th>
+                                    <th style="cursor: pointer; text-align: right;" id="productCompSortDiff">£ Variance (Ex VAT) ↕</th>
                                     <th style="cursor: pointer; text-align: right;" id="productCompSortPct">% Change ↕</th>
                                     <th style="text-align: right;">Share of Net Var</th>
                                 </tr>
