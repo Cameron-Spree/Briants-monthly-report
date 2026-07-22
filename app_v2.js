@@ -1924,17 +1924,35 @@ function findNearestHistoricalSale(data, productKey, targetMonthStr) {
 }
 
 function renderProductVarianceEngine(data) {
+    if (!data || data.length === 0) return;
+
     let dataA = [];
     let dataB = [];
     let lblA = "";
     let lblB = "";
 
+    let compAEl = document.getElementById('productCompMonthA');
+    let compBEl = document.getElementById('productCompMonthB');
+    let startAEl = document.getElementById('productCompStartA');
+    let endAEl = document.getElementById('productCompEndA');
+    let startBEl = document.getElementById('productCompStartB');
+    let endBEl = document.getElementById('productCompEndB');
+
+    let availMonths = getAvailableMonths(data);
+    let latestM = availMonths.length > 0 ? availMonths[0] : '2026-07';
+    let latestY = latestM.split('-')[0];
+    let prevY = String(Number(latestY) - 1);
+
     if (productCompRangeMode === 'range') {
-        let startA = productCompStartA;
-        let endA = productCompEndA;
-        let startB = productCompStartB;
-        let endB = productCompEndB;
-        if (!startA || !endA || !startB || !endB) return;
+        let startA = (startAEl && startAEl.value) || productCompStartA || `${latestY}-05`;
+        let endA = (endAEl && endAEl.value) || productCompEndA || `${latestY}-08`;
+        let startB = (startBEl && startBEl.value) || productCompStartB || `${prevY}-05`;
+        let endB = (endBEl && endBEl.value) || productCompEndB || `${prevY}-08`;
+
+        if (startAEl && !startAEl.value) startAEl.value = startA;
+        if (endAEl && !endAEl.value) endAEl.value = endA;
+        if (startBEl && !startBEl.value) startBEl.value = startB;
+        if (endBEl && !endBEl.value) endBEl.value = endB;
 
         let monthsA = getMonthArrayBetween(startA, endA);
         let monthsB = getMonthArrayBetween(startB, endB);
@@ -1945,9 +1963,11 @@ function renderProductVarianceEngine(data) {
         lblA = monthsA.length > 1 ? `${formatMonthLabel(startA)}–${formatMonthLabel(endA)}` : formatMonthLabel(startA);
         lblB = monthsB.length > 1 ? `${formatMonthLabel(startB)}–${formatMonthLabel(endB)}` : formatMonthLabel(startB);
     } else {
-        let mA = productCompMonthA;
-        let mB = productCompMonthB;
-        if (!mA || !mB) return;
+        let mA = (compAEl && compAEl.value) || productCompMonthA || latestM;
+        let mB = (compBEl && compBEl.value) || productCompMonthB || getYoyMonth(mA);
+
+        if (compAEl && !compAEl.value) compAEl.value = mA;
+        if (compBEl && !compBEl.value) compBEl.value = mB;
 
         dataA = data.filter(d => d['Reporting Month'] === mA);
         dataB = data.filter(d => d['Reporting Month'] === mB);
@@ -2054,7 +2074,7 @@ function renderProductVarianceEngine(data) {
         if (p.unitsB > 0) {
             priceB = p.revB / p.unitsB;
         } else {
-            let nearestB = findNearestHistoricalSale(data, p.key, mB);
+            let nearestB = findNearestHistoricalSale(data, p.key, productCompRangeMode === 'range' ? productCompStartB : productCompMonthB);
             if (nearestB) {
                 priceB = nearestB.avgPrice;
                 priceBLabel = ` (${formatMonthLabel(nearestB.monthStr)})`;
@@ -2069,7 +2089,7 @@ function renderProductVarianceEngine(data) {
         if (p.unitsA > 0) {
             priceA = p.revA / p.unitsA;
         } else {
-            let nearestA = findNearestHistoricalSale(data, p.key, mA);
+            let nearestA = findNearestHistoricalSale(data, p.key, productCompRangeMode === 'range' ? productCompStartA : productCompMonthA);
             if (nearestA) {
                 priceA = nearestA.avgPrice;
                 priceALabel = ` (${formatMonthLabel(nearestA.monthStr)})`;
@@ -2120,7 +2140,7 @@ function renderProductVarianceEngine(data) {
     // 3. Automated Executive Takeaway
     const takeawayEl = document.getElementById('productVarianceTakeawayText');
     if (takeawayEl) {
-        let modeLabel = productCompMode === 'yoy' ? 'YoY' : (productCompMode === 'mom' ? 'MoM' : 'Custom');
+        let modeLabel = productCompRangeMode === 'range' ? 'Seasonal Range' : (productCompMode === 'yoy' ? 'YoY' : (productCompMode === 'mom' ? 'MoM' : 'Custom'));
         let absDiff = Math.abs(diffRev);
         let formattedAbsDiff = formatCurrency(absDiff);
         let formattedPct = Math.abs(pctRev).toFixed(1) + '%';
@@ -2251,12 +2271,12 @@ function renderProductVarianceEngine(data) {
         sensitivityContainer.innerHTML = '';
 
         let priceHikes = [...productsList]
-            .filter(p => p.pricePct >= 3 && p.unitsPct <= -15 && p.unitsB > 0)
+            .filter(p => p.pricePct !== null && p.pricePct >= 3 && p.unitsPct <= -15 && p.unitsB > 0)
             .sort((a, b) => (b.pricePct * Math.abs(b.unitsPct)) - (a.pricePct * Math.abs(a.unitsPct)))
             .slice(0, 4);
 
         let priceCuts = [...productsList]
-            .filter(p => p.pricePct <= -3 && p.unitsPct >= 15 && p.unitsB > 0)
+            .filter(p => p.pricePct !== null && p.pricePct <= -3 && p.unitsPct >= 15 && p.unitsB > 0)
             .sort((a, b) => (a.pricePct * b.unitsPct) - (b.pricePct * a.unitsPct))
             .slice(0, 4);
 
@@ -2421,17 +2441,22 @@ function renderProductCompTable(productsList, totalNetDiff) {
         }
         if (filterImpact === 'drops' && p.diffRev >= 0) return false;
         if (filterImpact === 'gains' && p.diffRev <= 0) return false;
-        if (filterImpact === 'priceHikes' && p.pricePct <= 0) return false;
+        if (filterImpact === 'priceHikes' && (p.pricePct === null || p.pricePct <= 0)) return false;
         return true;
     });
 
-    // Sort
+    // Safe Sort
     filtered.sort((a, b) => {
         let valA = a[productCompSortCol];
         let valB = b[productCompSortCol];
 
-        if (typeof valA === 'string') {
-            return productCompSortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        if (valA === null || valA === undefined) valA = productCompSortDir === 'asc' ? Infinity : -Infinity;
+        if (valB === null || valB === undefined) valB = productCompSortDir === 'asc' ? Infinity : -Infinity;
+
+        if (typeof valA === 'string' || typeof valB === 'string') {
+            let strA = String(valA || '');
+            let strB = String(valB || '');
+            return productCompSortDir === 'asc' ? strA.localeCompare(strB) : strB.localeCompare(strA);
         } else {
             return productCompSortDir === 'asc' ? valA - valB : valB - valA;
         }
