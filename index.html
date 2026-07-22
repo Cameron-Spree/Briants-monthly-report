@@ -251,31 +251,63 @@
 
                 <!-- Comparison Control & Headline KPI Card -->
                 <div class="card" style="margin-bottom: 1.5rem; border-top: 4px solid #009640;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
                         <div>
-                            <h3 class="product-category-heading" style="margin: 0;">Performance Comparison Controls</h3>
-                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Compare any month against previous year (YoY) or previous month (MoM) to isolate revenue drivers and drops.</p>
+                            <h3 class="product-category-heading" style="margin: 0;">Performance Comparison &amp; Seasonal Controls</h3>
+                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Compare single months or multi-month seasonal blocks (e.g. Summer 2026 vs Summer 2025) to isolate performance drivers.</p>
                         </div>
                         
                         <!-- Control Bar -->
-                        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; background: #F8FAFC; padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #E2E8F0;">
-                            <div>
-                                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Primary Month (A)</label>
-                                <input type="month" id="productCompMonthA" style="padding: 0.35rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
-                            </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.6rem; background: #F8FAFC; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #E2E8F0; min-width: 540px;">
                             
-                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem;">
-                                <span style="font-size: 0.75rem; font-weight: 700; color: #64748B; text-transform: uppercase;">Presets</span>
-                                <div style="display: flex; gap: 0.25rem;">
-                                    <button id="productPresetYoY" class="btn-primary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 4px; height: 30px;">YoY</button>
-                                    <button id="productPresetMoM" class="btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 4px; height: 30px;">MoM</button>
+                            <!-- Mode & Seasonal Quick Presets Row -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <span style="font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Mode:</span>
+                                    <button id="productModeSingle" class="btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; height: 26px;">Single Month</button>
+                                    <button id="productModeRange" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; height: 26px;">Multi-Month Range</button>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span style="font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Presets:</span>
+                                    <button id="productPresetYoY" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; height: 26px;">YoY (1-Mo)</button>
+                                    <button id="productPresetMoM" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; height: 26px;">MoM</button>
+                                    <button id="productPresetSummer" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; height: 26px;">☀️ Summer (May-Aug)</button>
+                                    <button id="productPresetAutumn" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; height: 26px;">🍂 Autumn (Sep-Dec)</button>
                                 </div>
                             </div>
 
-                            <div>
-                                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Comparison Target (B)</label>
-                                <input type="month" id="productCompMonthB" style="padding: 0.35rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
+                            <!-- Single Month Pickers Row -->
+                            <div id="productSinglePickersRow" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                <div>
+                                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Primary Month (A)</label>
+                                    <input type="month" id="productCompMonthA" style="padding: 0.35rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Comparison Target (B)</label>
+                                    <input type="month" id="productCompMonthB" style="padding: 0.35rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
+                                </div>
                             </div>
+
+                            <!-- Multi-Month Range Pickers Row -->
+                            <div id="productRangePickersRow" style="display: none; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                <div>
+                                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #009640; text-transform: uppercase;">Period A (Current Range)</label>
+                                    <div style="display: flex; gap: 0.3rem; align-items: center;">
+                                        <input type="month" id="productCompStartA" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                        <span style="font-size: 0.8rem; color: #64748B;">to</span>
+                                        <input type="month" id="productCompEndA" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748B; text-transform: uppercase;">Period B (Comparison Target Range)</label>
+                                    <div style="display: flex; gap: 0.3rem; align-items: center;">
+                                        <input type="month" id="productCompStartB" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                        <span style="font-size: 0.8rem; color: #64748B;">to</span>
+                                        <input type="month" id="productCompEndB" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 

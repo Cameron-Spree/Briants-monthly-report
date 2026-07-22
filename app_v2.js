@@ -29,7 +29,12 @@ let productTableMonthA = "";
 let productTableMonthB = "";
 let productCompMonthA = "";
 let productCompMonthB = "";
-let productCompMode = "yoy"; // "yoy", "mom", or "custom"
+let productCompRangeMode = "single"; // "single" or "range"
+let productCompStartA = "";
+let productCompEndA = "";
+let productCompStartB = "";
+let productCompEndB = "";
+let productCompMode = "yoy"; // "yoy", "mom", "summer", "autumn", or "custom"
 let productCompSortCol = "diffRev";
 let productCompSortDir = "asc";
 let categoryTableMonthA = "";
@@ -541,11 +546,24 @@ document.addEventListener('DOMContentLoaded', async function() {
         prodB.addEventListener('change', () => { productTableMonthB = prodB.value; updateDashboards(); });
     }
 
-    // Product Performance Variance Engine pickers
+    // Product Performance Variance Engine pickers & Range Mode
     const pCompA = document.getElementById('productCompMonthA');
     const pCompB = document.getElementById('productCompMonthB');
+    const pStartA = document.getElementById('productCompStartA');
+    const pEndA = document.getElementById('productCompEndA');
+    const pStartB = document.getElementById('productCompStartB');
+    const pEndB = document.getElementById('productCompEndB');
+
+    const btnSingleMode = document.getElementById('productModeSingle');
+    const btnRangeMode = document.getElementById('productModeRange');
+    const rowSingle = document.getElementById('productSinglePickersRow');
+    const rowRange = document.getElementById('productRangePickersRow');
+
     const pPresetYoY = document.getElementById('productPresetYoY');
     const pPresetMoM = document.getElementById('productPresetMoM');
+    const pPresetSummer = document.getElementById('productPresetSummer');
+    const pPresetAutumn = document.getElementById('productPresetAutumn');
+
     if (pCompA && pCompB) {
         let defYoY = getYoyMonth(defA);
         pCompA.value = defA;
@@ -553,6 +571,34 @@ document.addEventListener('DOMContentLoaded', async function() {
         productCompMonthA = defA;
         productCompMonthB = defYoY;
         productCompMode = 'yoy';
+
+        // Default range defaults (Summer May-Aug)
+        let curYear = defA ? defA.split('-')[0] : '2026';
+        let prevYear = String(Number(curYear) - 1);
+        if (pStartA && pEndA && pStartB && pEndB) {
+            pStartA.value = `${curYear}-05`; pEndA.value = `${curYear}-08`;
+            pStartB.value = `${prevYear}-05`; pEndB.value = `${prevYear}-08`;
+            productCompStartA = pStartA.value; productCompEndA = pEndA.value;
+            productCompStartB = pStartB.value; productCompEndB = pEndB.value;
+        }
+
+        const setUIMode = (mode) => {
+            productCompRangeMode = mode;
+            if (mode === 'range') {
+                if (btnSingleMode) btnSingleMode.className = 'btn-secondary';
+                if (btnRangeMode) btnRangeMode.className = 'btn-primary';
+                if (rowSingle) rowSingle.style.display = 'none';
+                if (rowRange) rowRange.style.display = 'flex';
+            } else {
+                if (btnSingleMode) btnSingleMode.className = 'btn-primary';
+                if (btnRangeMode) btnRangeMode.className = 'btn-secondary';
+                if (rowSingle) rowSingle.style.display = 'flex';
+                if (rowRange) rowRange.style.display = 'none';
+            }
+        };
+
+        if (btnSingleMode) btnSingleMode.addEventListener('click', () => { setUIMode('single'); updateDashboards(); });
+        if (btnRangeMode) btnRangeMode.addEventListener('click', () => { setUIMode('range'); updateDashboards(); });
 
         pCompA.addEventListener('change', () => {
             productCompMonthA = pCompA.value;
@@ -569,16 +615,30 @@ document.addEventListener('DOMContentLoaded', async function() {
         pCompB.addEventListener('change', () => {
             productCompMonthB = pCompB.value;
             productCompMode = 'custom';
-            if (pPresetYoY) pPresetYoY.className = 'btn-secondary';
-            if (pPresetMoM) pPresetMoM.className = 'btn-secondary';
             updateDashboards();
         });
 
+        const bindRangeChange = (el, propName) => {
+            if (el) {
+                el.addEventListener('change', () => {
+                    if (propName === 'startA') productCompStartA = el.value;
+                    if (propName === 'endA') productCompEndA = el.value;
+                    if (propName === 'startB') productCompStartB = el.value;
+                    if (propName === 'endB') productCompEndB = el.value;
+                    setUIMode('range');
+                    updateDashboards();
+                });
+            }
+        };
+        bindRangeChange(pStartA, 'startA');
+        bindRangeChange(pEndA, 'endA');
+        bindRangeChange(pStartB, 'startB');
+        bindRangeChange(pEndB, 'endB');
+
         if (pPresetYoY) {
             pPresetYoY.addEventListener('click', () => {
+                setUIMode('single');
                 productCompMode = 'yoy';
-                pPresetYoY.className = 'btn-primary';
-                if (pPresetMoM) pPresetMoM.className = 'btn-secondary';
                 productCompMonthB = getYoyMonth(productCompMonthA);
                 pCompB.value = productCompMonthB;
                 updateDashboards();
@@ -587,11 +647,42 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         if (pPresetMoM) {
             pPresetMoM.addEventListener('click', () => {
+                setUIMode('single');
                 productCompMode = 'mom';
-                pPresetMoM.className = 'btn-primary';
-                if (pPresetYoY) pPresetYoY.className = 'btn-secondary';
                 productCompMonthB = getPrevMonth(productCompMonthA);
                 pCompB.value = productCompMonthB;
+                updateDashboards();
+            });
+        }
+
+        if (pPresetSummer) {
+            pPresetSummer.addEventListener('click', () => {
+                setUIMode('range');
+                productCompMode = 'summer';
+                let yr = productCompMonthA ? productCompMonthA.split('-')[0] : '2026';
+                let pYr = String(Number(yr) - 1);
+                if (pStartA && pEndA && pStartB && pEndB) {
+                    pStartA.value = `${yr}-05`; pEndA.value = `${yr}-08`;
+                    pStartB.value = `${pYr}-05`; pEndB.value = `${pYr}-08`;
+                    productCompStartA = pStartA.value; productCompEndA = pEndA.value;
+                    productCompStartB = pStartB.value; productCompEndB = pEndB.value;
+                }
+                updateDashboards();
+            });
+        }
+
+        if (pPresetAutumn) {
+            pPresetAutumn.addEventListener('click', () => {
+                setUIMode('range');
+                productCompMode = 'autumn';
+                let yr = '2025';
+                let pYr = '2024';
+                if (pStartA && pEndA && pStartB && pEndB) {
+                    pStartA.value = `${yr}-09`; pEndA.value = `${yr}-12`;
+                    pStartB.value = `${pYr}-09`; pEndB.value = `${pYr}-12`;
+                    productCompStartA = pStartA.value; productCompEndA = pEndA.value;
+                    productCompStartB = pStartB.value; productCompEndB = pEndB.value;
+                }
                 updateDashboards();
             });
         }
@@ -1833,12 +1924,37 @@ function findNearestHistoricalSale(data, productKey, targetMonthStr) {
 }
 
 function renderProductVarianceEngine(data) {
-    const mA = productCompMonthA;
-    const mB = productCompMonthB;
-    if (!mA || !mB) return;
+    let dataA = [];
+    let dataB = [];
+    let lblA = "";
+    let lblB = "";
 
-    const dataA = data.filter(d => d['Reporting Month'] === mA);
-    const dataB = data.filter(d => d['Reporting Month'] === mB);
+    if (productCompRangeMode === 'range') {
+        let startA = productCompStartA;
+        let endA = productCompEndA;
+        let startB = productCompStartB;
+        let endB = productCompEndB;
+        if (!startA || !endA || !startB || !endB) return;
+
+        let monthsA = getMonthArrayBetween(startA, endA);
+        let monthsB = getMonthArrayBetween(startB, endB);
+
+        dataA = data.filter(d => monthsA.includes(d['Reporting Month']));
+        dataB = data.filter(d => monthsB.includes(d['Reporting Month']));
+
+        lblA = monthsA.length > 1 ? `${formatMonthLabel(startA)}–${formatMonthLabel(endA)}` : formatMonthLabel(startA);
+        lblB = monthsB.length > 1 ? `${formatMonthLabel(startB)}–${formatMonthLabel(endB)}` : formatMonthLabel(startB);
+    } else {
+        let mA = productCompMonthA;
+        let mB = productCompMonthB;
+        if (!mA || !mB) return;
+
+        dataA = data.filter(d => d['Reporting Month'] === mA);
+        dataB = data.filter(d => d['Reporting Month'] === mB);
+
+        lblA = formatMonthLabel(mA);
+        lblB = formatMonthLabel(mB);
+    }
 
     const revA = dataA.reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
     const revB = dataB.reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
@@ -1846,9 +1962,9 @@ function renderProductVarianceEngine(data) {
     const pctRev = revB > 0 ? ((revA - revB) / revB * 100) : (revA > 0 ? 100 : 0);
 
     // Headline Summary Cards
-    setElementText('productCompLabelA', formatMonthLabel(mA) + ' Revenue');
+    setElementText('productCompLabelA', lblA + ' Rev (Ex VAT)');
     setElementText('productCompRevA', formatCurrency(revA));
-    setElementText('productCompLabelB', formatMonthLabel(mB) + ' Revenue');
+    setElementText('productCompLabelB', lblB + ' Rev (Ex VAT)');
     setElementText('productCompRevB', formatCurrency(revB));
 
     const diffEl = document.getElementById('productCompVarianceDiff');
@@ -1868,8 +1984,6 @@ function renderProductVarianceEngine(data) {
     if (pctCard) pctCard.style.borderLeftColor = pctRev >= 0 ? '#009640' : '#DC2626';
 
     // Header Month Labels in Tables
-    const lblA = formatMonthLabel(mA);
-    const lblB = formatMonthLabel(mB);
     setElementText('hdrDropA', lblA);
     setElementText('hdrDropB', lblB);
     setElementText('hdrGainA', lblA);
