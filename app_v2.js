@@ -932,6 +932,27 @@ function getYoyMonth(ym) {
     return (y-1) + '-' + m.toString().padStart(2,'0');
 }
 
+function getMonthArrayBetween(startYm, endYm) {
+    let months = [];
+    let [sy, sm] = startYm.split('-').map(Number);
+    let [ey, em] = endYm.split('-').map(Number);
+    let d = new Date(sy, sm - 1, 1);
+    let end = new Date(ey, em - 1, 1);
+    while (d <= end) {
+        months.push(d.getFullYear() + '-' + (d.getMonth() + 1).toString().padStart(2, '0'));
+        d.setMonth(d.getMonth() + 1);
+    }
+    return months;
+}
+
+function getAvailableMonths(data) {
+    let monthSet = new Set();
+    data.forEach(d => {
+        if (d['Reporting Month']) monthSet.add(d['Reporting Month']);
+    });
+    return Array.from(monthSet).sort().reverse();
+}
+
 function getProductKey(row) {
     if (!row) return 'Unknown';
     let sku = row.SKU;
