@@ -379,12 +379,24 @@
                     </div>
                 </div>
 
+                <!-- Price vs. Demand (Elasticity & Sensitivity Highlights) Card -->
+                <div class="card" style="margin-bottom: 1.5rem; border-top: 4px solid #8B5CF6;">
+                    <h3 class="product-category-heading" style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: #6D28D9;">
+                        <span>🏷️</span> Price Shift &amp; Demand Sensitivity Alerts
+                    </h3>
+                    <p style="font-size: 0.85rem; color: #64748B; margin-top: 0; margin-bottom: 1rem;">Products with notable unit price shifts (Ex VAT) coinciding with unit volume increases or drops between Month B and Month A.</p>
+                    
+                    <div id="productPriceSensitivityContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+
                 <!-- Unified Product Comparison Table Card -->
                 <div class="card" style="margin-bottom: 1.5rem;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                         <div>
                             <h3 class="product-category-heading" style="margin: 0;">Complete Product Comparison Table</h3>
-                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Detailed product-by-product net revenue comparison (Ex VAT) between Month A and Month B.</p>
+                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Detailed product-by-product price (Ex VAT), unit volume, and net revenue comparison between Month A and Month B.</p>
                         </div>
 
                         <!-- Filters for Table -->
@@ -395,8 +407,9 @@
                             </select>
                             <select id="productCompImpactFilter" style="padding: 0.45rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
                                 <option value="">All Products</option>
-                                <option value="drops">Only Drops (-£)</option>
-                                <option value="gains">Only Gains (+£)</option>
+                                <option value="drops">Only Rev Drops (-£)</option>
+                                <option value="gains">Only Rev Gains (+£)</option>
+                                <option value="priceHikes">Price Hikes (+Price)</option>
                             </select>
                             <button onclick="exportProductComparisonCsv()" class="btn-secondary" style="padding: 0.45rem 0.8rem; font-size: 0.85rem; height: 34px;">⬇ CSV Export</button>
                         </div>
@@ -410,11 +423,12 @@
                                     <th style="cursor: pointer;" id="productCompSortSku">SKU ↕</th>
                                     <th style="cursor: pointer;" id="productCompSortName">Product Name ↕</th>
                                     <th>Category</th>
-                                    <th style="text-align: right;" id="hdrTableB">Month B Rev Ex VAT (Qty)</th>
-                                    <th style="text-align: right;" id="hdrTableA">Month A Rev Ex VAT (Qty)</th>
+                                    <th style="text-align: right;" id="hdrTableB">Month B Rev (Qty)</th>
+                                    <th style="text-align: right;" id="hdrTableA">Month A Rev (Qty)</th>
+                                    <th style="cursor: pointer; text-align: right;" id="productCompSortPriceShift">Unit Price (B → A) ↕</th>
+                                    <th style="cursor: pointer; text-align: right;" id="productCompSortVolumeShift">Volume Shift % ↕</th>
                                     <th style="cursor: pointer; text-align: right;" id="productCompSortDiff">£ Variance (Ex VAT) ↕</th>
-                                    <th style="cursor: pointer; text-align: right;" id="productCompSortPct">% Change ↕</th>
-                                    <th style="text-align: right;">Share of Net Var</th>
+                                    <th style="cursor: pointer; text-align: right;" id="productCompSortPct">% Rev Change ↕</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>

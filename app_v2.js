@@ -191,6 +191,7 @@ ORDER BY \`Reporting Month\` DESC, total_orders DESC;`
     DATE_FORMAT(opl.date_created, '%Y-%m') AS \`Reporting Month\`,
     COALESCE(NULLIF(var_p.post_title, ''), parent_p.post_title) AS \`Product title\`,
     pm_sku.meta_value AS \`SKU\`,
+    pm_price.meta_value AS \`Catalog Price\`,
     SUM(opl.product_qty) AS \`Units\`,
     SUM(opl.product_net_revenue) AS \`N. Revenue\`,
     COUNT(DISTINCT opl.order_id) AS \`Orders\`,
@@ -218,6 +219,12 @@ LEFT JOIN wp_postmeta pm_sku
         ELSE opl.product_id
     END
    AND pm_sku.meta_key = '_sku'
+LEFT JOIN wp_postmeta pm_price
+    ON pm_price.post_id = CASE
+        WHEN opl.variation_id > 0 THEN opl.variation_id
+        ELSE opl.product_id
+    END
+   AND pm_price.meta_key = '_price'
 WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
   AND opl.date_created >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
 GROUP BY
@@ -1830,6 +1837,8 @@ function renderProductVarianceEngine(data) {
         let key = getProductKey(r);
         let cats = getCategoryNames(r);
         let catName = cats.length > 0 ? cats[cats.length - 1] : 'Uncategorized';
+        let catPrice = parseFloat(r['Catalog Price']) || 0;
+
         if (!productMap.has(key)) {
             productMap.set(key, {
                 key: key,
@@ -1837,6 +1846,7 @@ function renderProductVarianceEngine(data) {
                 name: r['Product title'] || 'Unknown',
                 category: catName,
                 categories: cats,
+                catalogPrice: catPrice,
                 revA: 0, unitsA: 0,
                 revB: 0, unitsB: 0
             });
@@ -1844,12 +1854,15 @@ function renderProductVarianceEngine(data) {
         let p = productMap.get(key);
         p.revA += (Number(r['N. Revenue']) || 0);
         p.unitsA += (Number(r['Units']) || 0);
+        if (!p.catalogPrice && catPrice) p.catalogPrice = catPrice;
     });
 
     dataB.forEach(r => {
         let key = getProductKey(r);
         let cats = getCategoryNames(r);
         let catName = cats.length > 0 ? cats[cats.length - 1] : 'Uncategorized';
+        let catPrice = parseFloat(r['Catalog Price']) || 0;
+
         if (!productMap.has(key)) {
             productMap.set(key, {
                 key: key,
@@ -1857,6 +1870,7 @@ function renderProductVarianceEngine(data) {
                 name: r['Product title'] || 'Unknown',
                 category: catName,
                 categories: cats,
+                catalogPrice: catPrice,
                 revA: 0, unitsA: 0,
                 revB: 0, unitsB: 0
             });
@@ -1864,6 +1878,7 @@ function renderProductVarianceEngine(data) {
         let p = productMap.get(key);
         p.revB += (Number(r['N. Revenue']) || 0);
         p.unitsB += (Number(r['Units']) || 0);
+        if (!p.catalogPrice && catPrice) p.catalogPrice = catPrice;
     });
 
     let productsList = [];
@@ -1871,6 +1886,16 @@ function renderProductVarianceEngine(data) {
         p.diffRev = p.revA - p.revB;
         p.diffUnits = p.unitsA - p.unitsB;
         p.pct = p.revB > 0 ? ((p.revA - p.revB) / p.revB * 100) : (p.revA > 0 ? 100 : 0);
+
+        let priceB = p.unitsB > 0 ? (p.revB / p.unitsB) : (p.catalogPrice || 0);
+        let priceA = p.unitsA > 0 ? (p.revA / p.unitsA) : (p.catalogPrice || priceB || 0);
+        p.priceB = priceB;
+        p.priceA = priceA;
+        p.priceDiff = priceA - priceB;
+        p.pricePct = priceB > 0 ? ((priceA - priceB) / priceB * 100) : 0;
+
+        p.unitsPct = p.unitsB > 0 ? ((p.unitsA - p.unitsB) / p.unitsB * 100) : (p.unitsA > 0 ? 100 : -100);
+
         productsList.push(p);
     });
 
@@ -2022,7 +2047,91 @@ function renderProductVarianceEngine(data) {
         }
     }
 
-    // 7. Dynamic Category Filter in Main Table
+    // 7. Render Price Shift & Demand Sensitivity Alert Cards
+    const sensitivityContainer = document.getElementById('productPriceSensitivityContainer');
+    if (sensitivityContainer) {
+        sensitivityContainer.innerHTML = '';
+
+        let priceHikes = [...productsList]
+            .filter(p => p.pricePct >= 3 && p.unitsPct <= -15 && p.unitsB > 0)
+            .sort((a, b) => (b.pricePct * Math.abs(b.unitsPct)) - (a.pricePct * Math.abs(a.unitsPct)))
+            .slice(0, 4);
+
+        let priceCuts = [...productsList]
+            .filter(p => p.pricePct <= -3 && p.unitsPct >= 15 && p.unitsB > 0)
+            .sort((a, b) => (a.pricePct * b.unitsPct) - (b.pricePct * a.unitsPct))
+            .slice(0, 4);
+
+        if (priceHikes.length === 0 && priceCuts.length === 0) {
+            sensitivityContainer.innerHTML = `
+                <div style="grid-column: span 2; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1.25rem; text-align: center; color: #64748B; font-size: 0.88rem;">
+                    No major price sensitivity anomalies detected between ${lblB} and ${lblA}.
+                </div>
+            `;
+        } else {
+            let hikeHtml = '';
+            if (priceHikes.length > 0) {
+                hikeHtml = `
+                    <div style="background: #FFF5F5; border: 1px solid #FECDD3; border-radius: 8px; padding: 1rem; border-left: 4px solid #E11D48;">
+                        <h4 style="font-weight: 700; color: #9F1239; font-size: 0.85rem; margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.4rem;">
+                            <span>⚠️</span> Price Increase → Volume Loss (${priceHikes.length})
+                        </h4>
+                        <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                `;
+                priceHikes.forEach(p => {
+                    hikeHtml += `
+                        <div style="background: white; border: 1px solid #FFE4E6; border-radius: 6px; padding: 0.5rem 0.75rem;">
+                            <div style="font-weight: 600; font-size: 0.85rem; color: #1E293B;">[${p.sku}] ${p.name}</div>
+                            <div style="font-size: 0.78rem; color: #64748B; margin-top: 0.2rem; display: flex; justify-content: space-between;">
+                                <span>Unit Price: <strong style="color: #D97706;">${formatCurrency(p.priceB)} → ${formatCurrency(p.priceA)} (+${p.pricePct.toFixed(1)}%)</strong></span>
+                                <span>Sales: <strong style="color: #DC2626;">${p.unitsB} → ${p.unitsA} units (${p.unitsPct.toFixed(1)}%)</strong></span>
+                            </div>
+                        </div>
+                    `;
+                });
+                hikeHtml += `</div></div>`;
+            } else {
+                hikeHtml = `
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem; color: #64748B; font-size: 0.85rem;">
+                        No major price hikes with volume drops recorded.
+                    </div>
+                `;
+            }
+
+            let cutHtml = '';
+            if (priceCuts.length > 0) {
+                cutHtml = `
+                    <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 1rem; border-left: 4px solid #16A34A;">
+                        <h4 style="font-weight: 700; color: #166534; font-size: 0.85rem; margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.4rem;">
+                            <span>📈</span> Price Cut → Volume Growth (${priceCuts.length})
+                        </h4>
+                        <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                `;
+                priceCuts.forEach(p => {
+                    cutHtml += `
+                        <div style="background: white; border: 1px solid #DCFCE7; border-radius: 6px; padding: 0.5rem 0.75rem;">
+                            <div style="font-weight: 600; font-size: 0.85rem; color: #1E293B;">[${p.sku}] ${p.name}</div>
+                            <div style="font-size: 0.78rem; color: #64748B; margin-top: 0.2rem; display: flex; justify-content: space-between;">
+                                <span>Unit Price: <strong style="color: #059669;">${formatCurrency(p.priceB)} → ${formatCurrency(p.priceA)} (${p.pricePct.toFixed(1)}%)</strong></span>
+                                <span>Sales: <strong style="color: #009640;">${p.unitsB} → ${p.unitsA} units (+${p.unitsPct.toFixed(1)}%)</strong></span>
+                            </div>
+                        </div>
+                    `;
+                });
+                cutHtml += `</div></div>`;
+            } else {
+                cutHtml = `
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem; color: #64748B; font-size: 0.85rem;">
+                        No major price cuts with volume surges recorded.
+                    </div>
+                `;
+            }
+
+            sensitivityContainer.innerHTML = hikeHtml + cutHtml;
+        }
+    }
+
+    // 8. Dynamic Category Filter in Main Table
     const catSelect = document.getElementById('productCompCategoryFilter');
     if (catSelect && !catSelect.dataset.populated) {
         let uniqueCats = new Set();
@@ -2060,7 +2169,7 @@ function renderProductVarianceEngine(data) {
                     productCompSortDir = productCompSortDir === 'asc' ? 'desc' : 'asc';
                 } else {
                     productCompSortCol = colName;
-                    productCompSortDir = 'asc';
+                    productCompSortDir = (colName === 'sku' || colName === 'name') ? 'asc' : 'asc';
                 }
                 updateCompSortHeaderSymbols();
                 renderProductCompTable(productsList, diffRev);
@@ -2070,11 +2179,13 @@ function renderProductVarianceEngine(data) {
     };
     bindSortHeader('productCompSortSku', 'sku');
     bindSortHeader('productCompSortName', 'name');
+    bindSortHeader('productCompSortPriceShift', 'pricePct');
+    bindSortHeader('productCompSortVolumeShift', 'unitsPct');
     bindSortHeader('productCompSortDiff', 'diffRev');
     bindSortHeader('productCompSortPct', 'pct');
 
     const updateCompSortHeaderSymbols = () => {
-        const cols = { sku: 'productCompSortSku', name: 'productCompSortName', diffRev: 'productCompSortDiff', pct: 'productCompSortPct' };
+        const cols = { sku: 'productCompSortSku', name: 'productCompSortName', pricePct: 'productCompSortPriceShift', unitsPct: 'productCompSortVolumeShift', diffRev: 'productCompSortDiff', pct: 'productCompSortPct' };
         for (const [col, id] of Object.entries(cols)) {
             const el = document.getElementById(id);
             if (el) {
@@ -2112,6 +2223,7 @@ function renderProductCompTable(productsList, totalNetDiff) {
         }
         if (filterImpact === 'drops' && p.diffRev >= 0) return false;
         if (filterImpact === 'gains' && p.diffRev <= 0) return false;
+        if (filterImpact === 'priceHikes' && p.pricePct <= 0) return false;
         return true;
     });
 
@@ -2131,11 +2243,9 @@ function renderProductCompTable(productsList, totalNetDiff) {
 
     tbody.innerHTML = '';
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:#64748B; padding:2rem;">No products match current filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:#64748B; padding:2rem;">No products match current filters.</td></tr>';
         return;
     }
-
-    let absTotalNetDiff = Math.abs(totalNetDiff);
 
     filtered.forEach((p, idx) => {
         let tr = document.createElement('tr');
@@ -2143,11 +2253,13 @@ function renderProductCompTable(productsList, totalNetDiff) {
         let diffSign = p.diffRev > 0 ? '+' : '';
         let pctSign = p.pct > 0 ? '+' : '';
 
-        let shareText = '--';
-        if (absTotalNetDiff > 0 && p.diffRev !== 0) {
-            let shareVal = (p.diffRev / absTotalNetDiff) * 100;
-            shareText = (shareVal >= 0 ? '+' : '') + shareVal.toFixed(1) + '%';
-        }
+        let priceStr = p.priceB > 0 || p.priceA > 0 ? `${formatCurrency(p.priceB)} → ${formatCurrency(p.priceA)}` : 'N/A';
+        let priceSign = p.pricePct > 0 ? '+' : '';
+        let priceStyle = p.pricePct > 0 ? 'color:#D97706;' : p.pricePct < 0 ? 'color:#059669;' : 'color:#64748B;';
+
+        let volumeStr = `${p.unitsB} → ${p.unitsA}`;
+        let volumeSign = p.unitsPct > 0 ? '+' : '';
+        let volumeStyle = p.unitsPct > 0 ? 'color:#009640; font-weight:600;' : p.unitsPct < 0 ? 'color:#DC2626; font-weight:600;' : 'color:#64748B;';
 
         tr.innerHTML = `
             <td style="text-align:center; color:#64748B;">${idx + 1}</td>
@@ -2156,9 +2268,10 @@ function renderProductCompTable(productsList, totalNetDiff) {
             <td style="color:#64748B; font-size:0.85rem;">${p.category}</td>
             <td style="text-align:right;">${formatCurrency(p.revB)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsB})</span></td>
             <td style="text-align:right;">${formatCurrency(p.revA)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsA})</span></td>
+            <td style="text-align:right; font-size:0.85rem;">${priceStr} <span style="${priceStyle}">(${priceSign}${p.pricePct.toFixed(1)}%)</span></td>
+            <td style="text-align:right; font-size:0.85rem;">${volumeStr} <span style="${volumeStyle}">(${volumeSign}${p.unitsPct.toFixed(1)}%)</span></td>
             <td style="text-align:right; font-weight:700; color:${diffColor};">${diffSign}${formatCurrency(p.diffRev)}</td>
             <td style="text-align:right; font-weight:600; color:${diffColor};">${pctSign}${p.pct.toFixed(1)}%</td>
-            <td style="text-align:right; color:#475569; font-weight:500;">${shareText}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -2173,12 +2286,12 @@ function exportProductComparisonCsv() {
     const mA = productCompMonthA;
     const mB = productCompMonthB;
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += `SKU,Product Name,Category,${formatMonthLabel(mB)} Revenue,${formatMonthLabel(mB)} Units,${formatMonthLabel(mA)} Revenue,${formatMonthLabel(mA)} Units,Net Variance (£),% Change\n`;
+    csvContent += `SKU,Product Name,Category,${formatMonthLabel(mB)} Revenue,${formatMonthLabel(mB)} Units,${formatMonthLabel(mB)} Unit Price,${formatMonthLabel(mA)} Revenue,${formatMonthLabel(mA)} Units,${formatMonthLabel(mA)} Unit Price,Price Shift %,Volume Shift %,Net Variance (£),% Rev Change\n`;
 
     window.lastFilteredProductCompList.forEach(p => {
         let name = p.name ? p.name.replace(/"/g, '""') : '';
         let cat = p.category ? p.category.replace(/"/g, '""') : '';
-        csvContent += `"${p.sku}","${name}","${cat}",${p.revB.toFixed(2)},${p.unitsB},${p.revA.toFixed(2)},${p.unitsA},${p.diffRev.toFixed(2)},${p.pct.toFixed(2)}\n`;
+        csvContent += `"${p.sku}","${name}","${cat}",${p.revB.toFixed(2)},${p.unitsB},${p.priceB.toFixed(2)},${p.revA.toFixed(2)},${p.unitsA},${p.priceA.toFixed(2)},${p.pricePct.toFixed(2)},${p.unitsPct.toFixed(2)},${p.diffRev.toFixed(2)},${p.pct.toFixed(2)}\n`;
     });
 
     let encodedUri = encodeURI(csvContent);
@@ -2192,7 +2305,6 @@ function exportProductComparisonCsv() {
 
 function updateCategoryDashboard() {
     const data = appData.product;
-    if (!data || data.length === 0) return;
     const months = getMonthsInRange();
 
     // Category trend chart
