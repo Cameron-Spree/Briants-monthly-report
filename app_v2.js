@@ -27,6 +27,11 @@ let paymentMonthA = "";
 let paymentMonthB = "";
 let productTableMonthA = "";
 let productTableMonthB = "";
+let productCompMonthA = "";
+let productCompMonthB = "";
+let productCompMode = "yoy"; // "yoy", "mom", or "custom"
+let productCompSortCol = "diffRev";
+let productCompSortDir = "asc";
 let categoryTableMonthA = "";
 let categoryTableMonthB = "";
 let selectedProductSalesSku = "";
@@ -519,6 +524,62 @@ document.addEventListener('DOMContentLoaded', async function() {
         productTableMonthA = defA; productTableMonthB = defB;
         prodA.addEventListener('change', () => { productTableMonthA = prodA.value; updateDashboards(); });
         prodB.addEventListener('change', () => { productTableMonthB = prodB.value; updateDashboards(); });
+    }
+
+    // Product Performance Variance Engine pickers
+    const pCompA = document.getElementById('productCompMonthA');
+    const pCompB = document.getElementById('productCompMonthB');
+    const pPresetYoY = document.getElementById('productPresetYoY');
+    const pPresetMoM = document.getElementById('productPresetMoM');
+    if (pCompA && pCompB) {
+        let defYoY = getYoyMonth(defA);
+        pCompA.value = defA;
+        pCompB.value = defYoY;
+        productCompMonthA = defA;
+        productCompMonthB = defYoY;
+        productCompMode = 'yoy';
+
+        pCompA.addEventListener('change', () => {
+            productCompMonthA = pCompA.value;
+            if (productCompMode === 'yoy') {
+                productCompMonthB = getYoyMonth(productCompMonthA);
+                pCompB.value = productCompMonthB;
+            } else if (productCompMode === 'mom') {
+                productCompMonthB = getPrevMonth(productCompMonthA);
+                pCompB.value = productCompMonthB;
+            }
+            updateDashboards();
+        });
+
+        pCompB.addEventListener('change', () => {
+            productCompMonthB = pCompB.value;
+            productCompMode = 'custom';
+            if (pPresetYoY) pPresetYoY.className = 'btn-secondary';
+            if (pPresetMoM) pPresetMoM.className = 'btn-secondary';
+            updateDashboards();
+        });
+
+        if (pPresetYoY) {
+            pPresetYoY.addEventListener('click', () => {
+                productCompMode = 'yoy';
+                pPresetYoY.className = 'btn-primary';
+                if (pPresetMoM) pPresetMoM.className = 'btn-secondary';
+                productCompMonthB = getYoyMonth(productCompMonthA);
+                pCompB.value = productCompMonthB;
+                updateDashboards();
+            });
+        }
+
+        if (pPresetMoM) {
+            pPresetMoM.addEventListener('click', () => {
+                productCompMode = 'mom';
+                pPresetMoM.className = 'btn-primary';
+                if (pPresetYoY) pPresetYoY.className = 'btn-secondary';
+                productCompMonthB = getPrevMonth(productCompMonthA);
+                pCompB.value = productCompMonthB;
+                updateDashboards();
+            });
+        }
     }
     // Category table pickers
     const catA = document.getElementById('categoryTableMonthA');
@@ -1632,13 +1693,14 @@ function updateProductDashboard() {
     if (!data || data.length === 0) return;
     const months = getMonthsInRange();
 
-    // Product trend chart (All Products or single SKU)
+    // 1. Run Variance Engine
+    renderProductVarianceEngine(data);
+
+    // 2. Individual Product Sales Trend Chart (Bottom section)
     let selector = document.getElementById('productTrendSelector');
     let searchInput = document.getElementById('productSearch');
     const minRevInput = document.getElementById('productMinRev');
     const maxRevInput = document.getElementById('productMaxRev');
-    const minUnitsInput = document.getElementById('productMinUnits');
-    const maxUnitsInput = document.getElementById('productMaxUnits');
     
     if (selector && searchInput) {
         let productStats = new Map(); // key -> { name, totalRev, totalUnits }
@@ -1657,8 +1719,6 @@ function updateProductDashboard() {
             let filter = searchInput.value.toLowerCase();
             let minRev = parseFloat(minRevInput.value) || 0;
             let maxRev = parseFloat(maxRevInput.value) || Infinity;
-            let minUnits = parseFloat(minUnitsInput.value) || 0;
-            let maxUnits = parseFloat(maxUnitsInput.value) || Infinity;
 
             let currentSel = selector.value;
             selector.innerHTML = '<option value="__ALL__">All Products (Total Revenue)</option>';
@@ -1671,7 +1731,6 @@ function updateProductDashboard() {
                 
                 if (filter && !text.toLowerCase().includes(filter)) return;
                 if (stats.totalRev < minRev || stats.totalRev > maxRev) return;
-                if (stats.totalUnits < minUnits || stats.totalUnits > maxUnits) return;
                 
                 window.lastFilteredProducts.push({ sku: displaySku, name: stats.name, totalRev: stats.totalRev, totalUnits: stats.totalUnits });
                 
@@ -1688,50 +1747,16 @@ function updateProductDashboard() {
             searchInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
             if (minRevInput) minRevInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
             if (maxRevInput) maxRevInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
-            if (minUnitsInput) minUnitsInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
-            if (maxUnitsInput) maxUnitsInput.oninput = () => { populateOptions(); renderProductTrendChart(selector.value, data, months); };
 
             selector.onchange = () => {
                 renderProductTrendChart(selector.value, data, months);
             };
-
-            let prevBtn = document.getElementById('productPrevBtn');
-            let nextBtn = document.getElementById('productNextBtn');
-            if (prevBtn && nextBtn) {
-                prevBtn.onclick = () => {
-                    if (selector.selectedIndex > 0) {
-                        selector.selectedIndex--;
-                        selector.dispatchEvent(new Event('change'));
-                    }
-                };
-                nextBtn.onclick = () => {
-                    if (selector.selectedIndex < selector.options.length - 1) {
-                        selector.selectedIndex++;
-                        selector.dispatchEvent(new Event('change'));
-                    }
-                };
-            }
         };
-
-        if (!selector.dataset.initialized) {
-            selector.dataset.initialized = "true";
-        }
         
         populateOptions();
         attachHandlers();
         
         renderProductTrendChart(selector.value, data, months);
-    }
-
-    // Two comparison tables
-    renderProductTable('productTableA', 'productFilterA', productTableMonthA, data, productSortA, 'A');
-    renderProductTable('productTableB', 'productFilterB', productTableMonthB, data, productSortB, 'B');
-
-    // Rising & Falling Stars
-    const latest = months[months.length - 1];
-    const prev = months.length > 1 ? months[months.length - 2] : null;
-    if (latest && prev) {
-        renderRisingFallingStars('product', latest, prev, data, 'productRisingStars', 'productFallingStars');
     }
 }
 
@@ -1753,66 +1778,415 @@ function renderProductTrendChart(skuKey, data, months) {
     renderLineChart('productTrendChart', months.map(formatMonthLabel), { label: 'Net Revenue (\u00A3)', data: chartData, color: '#009640' });
 }
 
-function renderProductTable(tableId, filterId, targetMonth, data, sortState, side) {
-    const tbody = document.querySelector('#' + tableId + ' tbody');
-    const filterInput = document.getElementById(filterId);
+function renderProductVarianceEngine(data) {
+    const mA = productCompMonthA;
+    const mB = productCompMonthB;
+    if (!mA || !mB) return;
+
+    const dataA = data.filter(d => d['Reporting Month'] === mA);
+    const dataB = data.filter(d => d['Reporting Month'] === mB);
+
+    const revA = dataA.reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
+    const revB = dataB.reduce((sum, r) => sum + (Number(r['N. Revenue']) || 0), 0);
+    const diffRev = revA - revB;
+    const pctRev = revB > 0 ? ((revA - revB) / revB * 100) : (revA > 0 ? 100 : 0);
+
+    // Headline Summary Cards
+    setElementText('productCompLabelA', formatMonthLabel(mA) + ' Revenue');
+    setElementText('productCompRevA', formatCurrency(revA));
+    setElementText('productCompLabelB', formatMonthLabel(mB) + ' Revenue');
+    setElementText('productCompRevB', formatCurrency(revB));
+
+    const diffEl = document.getElementById('productCompVarianceDiff');
+    const pctEl = document.getElementById('productCompVariancePct');
+    const diffCard = document.getElementById('productCompVarianceCard');
+    const pctCard = document.getElementById('productCompPctCard');
+
+    if (diffEl) {
+        diffEl.textContent = (diffRev >= 0 ? '+' : '') + formatCurrency(diffRev);
+        diffEl.style.color = diffRev >= 0 ? '#009640' : '#DC2626';
+    }
+    if (pctEl) {
+        pctEl.textContent = (pctRev >= 0 ? '+' : '') + pctRev.toFixed(1) + '%';
+        pctEl.style.color = pctRev >= 0 ? '#009640' : '#DC2626';
+    }
+    if (diffCard) diffCard.style.borderLeftColor = diffRev >= 0 ? '#009640' : '#DC2626';
+    if (pctCard) pctCard.style.borderLeftColor = pctRev >= 0 ? '#009640' : '#DC2626';
+
+    // Header Month Labels in Tables
+    const lblA = formatMonthLabel(mA);
+    const lblB = formatMonthLabel(mB);
+    setElementText('hdrDropA', lblA);
+    setElementText('hdrDropB', lblB);
+    setElementText('hdrGainA', lblA);
+    setElementText('hdrGainB', lblB);
+    setElementText('hdrTableA', lblA + ' Rev (Qty)');
+    setElementText('hdrTableB', lblB + ' Rev (Qty)');
+
+    // 1. Group by Product Key
+    let productMap = new Map();
+
+    dataA.forEach(r => {
+        let key = getProductKey(r);
+        let cats = getCategoryNames(r);
+        let catName = cats.length > 0 ? cats[cats.length - 1] : 'Uncategorized';
+        if (!productMap.has(key)) {
+            productMap.set(key, {
+                key: key,
+                sku: getDisplaySku(r.SKU),
+                name: r['Product title'] || 'Unknown',
+                category: catName,
+                categories: cats,
+                revA: 0, unitsA: 0,
+                revB: 0, unitsB: 0
+            });
+        }
+        let p = productMap.get(key);
+        p.revA += (Number(r['N. Revenue']) || 0);
+        p.unitsA += (Number(r['Units']) || 0);
+    });
+
+    dataB.forEach(r => {
+        let key = getProductKey(r);
+        let cats = getCategoryNames(r);
+        let catName = cats.length > 0 ? cats[cats.length - 1] : 'Uncategorized';
+        if (!productMap.has(key)) {
+            productMap.set(key, {
+                key: key,
+                sku: getDisplaySku(r.SKU),
+                name: r['Product title'] || 'Unknown',
+                category: catName,
+                categories: cats,
+                revA: 0, unitsA: 0,
+                revB: 0, unitsB: 0
+            });
+        }
+        let p = productMap.get(key);
+        p.revB += (Number(r['N. Revenue']) || 0);
+        p.unitsB += (Number(r['Units']) || 0);
+    });
+
+    let productsList = [];
+    productMap.forEach(p => {
+        p.diffRev = p.revA - p.revB;
+        p.diffUnits = p.unitsA - p.unitsB;
+        p.pct = p.revB > 0 ? ((p.revA - p.revB) / p.revB * 100) : (p.revA > 0 ? 100 : 0);
+        productsList.push(p);
+    });
+
+    // 2. Group by Category
+    let categoryMap = new Map();
+    productsList.forEach(p => {
+        p.categories.forEach(cat => {
+            if (!categoryMap.has(cat)) {
+                categoryMap.set(cat, { catName: cat, revA: 0, revB: 0, diffRev: 0 });
+            }
+            let c = categoryMap.get(cat);
+            c.revA += p.revA;
+            c.revB += p.revB;
+        });
+    });
+
+    let categoryList = [];
+    categoryMap.forEach(c => {
+        c.diffRev = c.revA - c.revB;
+        categoryList.push(c);
+    });
+
+    // 3. Automated Executive Takeaway
+    const takeawayEl = document.getElementById('productVarianceTakeawayText');
+    if (takeawayEl) {
+        let modeLabel = productCompMode === 'yoy' ? 'YoY' : (productCompMode === 'mom' ? 'MoM' : 'Custom');
+        let absDiff = Math.abs(diffRev);
+        let formattedAbsDiff = formatCurrency(absDiff);
+        let formattedPct = Math.abs(pctRev).toFixed(1) + '%';
+
+        let catDrops = [...categoryList].filter(c => c.diffRev < 0).sort((a, b) => a.diffRev - b.diffRev);
+        let catGains = [...categoryList].filter(c => c.diffRev > 0).sort((a, b) => b.diffRev - a.diffRev);
+
+        let prodDrops = [...productsList].filter(p => p.diffRev < 0).sort((a, b) => a.diffRev - b.diffRev);
+        let prodGains = [...productsList].filter(p => p.diffRev > 0).sort((a, b) => b.diffRev - a.diffRev);
+
+        if (diffRev < -100) {
+            let topCatDrop = catDrops[0];
+            let topProdDrop1 = prodDrops[0];
+            let topProdDrop2 = prodDrops[1];
+
+            let catDropPctText = topCatDrop && absDiff > 0 ? ` (${((Math.abs(topCatDrop.diffRev) / absDiff) * 100).toFixed(0)}% of total drop)` : '';
+            let text = `<strong>${lblA}</strong> revenue fell by <strong>${formattedAbsDiff} (-${formattedPct})</strong> compared to <strong>${lblB}</strong> (${modeLabel}). `;
+            if (topCatDrop) {
+                text += `The largest category decline was in <strong>${topCatDrop.catName}</strong> (-${formatCurrency(Math.abs(topCatDrop.diffRev))})${catDropPctText}. `;
+            }
+            if (topProdDrop1) {
+                text += `Top product drops were <strong>[${topProdDrop1.sku}] ${topProdDrop1.name}</strong> (-${formatCurrency(Math.abs(topProdDrop1.diffRev))})`;
+                if (topProdDrop2) {
+                    text += ` and <strong>[${topProdDrop2.sku}] ${topProdDrop2.name}</strong> (-${formatCurrency(Math.abs(topProdDrop2.diffRev))}).`;
+                } else {
+                    text += `.`;
+                }
+            }
+            takeawayEl.innerHTML = text;
+        } else if (diffRev > 100) {
+            let topCatGain = catGains[0];
+            let topProdGain1 = prodGains[0];
+            let topProdGain2 = prodGains[1];
+
+            let catGainPctText = topCatGain && absDiff > 0 ? ` (${((topCatGain.diffRev / absDiff) * 100).toFixed(0)}% of total growth)` : '';
+            let text = `<strong>${lblA}</strong> revenue grew by <strong>+${formattedAbsDiff} (+${formattedPct})</strong> compared to <strong>${lblB}</strong> (${modeLabel}). `;
+            if (topCatGain) {
+                text += `Growth was driven primarily by <strong>${topCatGain.catName}</strong> (+${formatCurrency(topCatGain.diffRev)})${catGainPctText}. `;
+            }
+            if (topProdGain1) {
+                text += `Top revenue gainers were <strong>[${topProdGain1.sku}] ${topProdGain1.name}</strong> (+${formatCurrency(topProdGain1.diffRev)})`;
+                if (topProdGain2) {
+                    text += ` and <strong>[${topProdGain2.sku}] ${topProdGain2.name}</strong> (+${formatCurrency(topProdGain2.diffRev)}).`;
+                } else {
+                    text += `.`;
+                }
+            }
+            takeawayEl.innerHTML = text;
+        } else {
+            takeawayEl.innerHTML = `<strong>${lblA}</strong> revenue is stable compared to <strong>${lblB}</strong> (${modeLabel}), with a net change of <strong>${diffRev >= 0 ? '+' : ''}${formatCurrency(diffRev)} (${(pctRev >= 0 ? '+' : '') + pctRev.toFixed(1)}%)</strong>.`;
+        }
+    }
+
+    // 4. Render Category Impact Breakdown List
+    const catListEl = document.getElementById('productCategoryVarianceList');
+    if (catListEl) {
+        catListEl.innerHTML = '';
+        let sortedCats = [...categoryList].sort((a, b) => Math.abs(b.diffRev) - Math.abs(a.diffRev)).slice(0, 7);
+        if (sortedCats.length === 0) {
+            catListEl.innerHTML = '<div style="color:#64748B; font-size:0.85rem; padding:0.5rem;">No category data available.</div>';
+        } else {
+            sortedCats.forEach(c => {
+                let div = document.createElement('div');
+                div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; padding:0.35rem 0.6rem; background:#fff; border-radius:4px; border:1px solid #E2E8F0;';
+                let sign = c.diffRev >= 0 ? '+' : '';
+                let color = c.diffRev >= 0 ? '#009640' : '#DC2626';
+                let bg = c.diffRev >= 0 ? '#DCFCE7' : '#FEE2E2';
+                div.innerHTML = `
+                    <span style="font-weight:600; color:#373737; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;" title="${c.catName}">${c.catName}</span>
+                    <span style="font-weight:700; color:${color}; background:${bg}; padding:0.15rem 0.4rem; border-radius:4px; font-size:0.8rem;">${sign}${formatCurrency(c.diffRev)}</span>
+                `;
+                catListEl.appendChild(div);
+            });
+        }
+    }
+
+    // 5. Populate Top Drops Table (£ Losers)
+    const tbodyDrops = document.querySelector('#productTopDropsTable tbody');
+    if (tbodyDrops) {
+        tbodyDrops.innerHTML = '';
+        let topDrops = [...productsList].filter(p => p.diffRev < 0).sort((a, b) => a.diffRev - b.diffRev).slice(0, 5);
+        if (topDrops.length === 0) {
+            tbodyDrops.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748B; padding:1rem;">No revenue drops recorded.</td></tr>';
+        } else {
+            topDrops.forEach(p => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:600;">${p.sku}</td>
+                    <td style="font-weight:500;">${p.name}</td>
+                    <td style="color:#64748B; font-size:0.8rem;">${p.category}</td>
+                    <td style="text-align:right;">${formatCurrency(p.revB)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsB})</span></td>
+                    <td style="text-align:right;">${formatCurrency(p.revA)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsA})</span></td>
+                    <td style="text-align:right; font-weight:700; color:#DC2626;">-${formatCurrency(Math.abs(p.diffRev))}</td>
+                    <td style="text-align:right; font-weight:600; color:#DC2626;">${p.pct.toFixed(1)}%</td>
+                `;
+                tbodyDrops.appendChild(tr);
+            });
+        }
+    }
+
+    // 6. Populate Top Gains Table (£ Winners)
+    const tbodyGains = document.querySelector('#productTopGainsTable tbody');
+    if (tbodyGains) {
+        tbodyGains.innerHTML = '';
+        let topGains = [...productsList].filter(p => p.diffRev > 0).sort((a, b) => b.diffRev - a.diffRev).slice(0, 5);
+        if (topGains.length === 0) {
+            tbodyGains.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748B; padding:1rem;">No revenue gains recorded.</td></tr>';
+        } else {
+            topGains.forEach(p => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:600;">${p.sku}</td>
+                    <td style="font-weight:500;">${p.name}</td>
+                    <td style="color:#64748B; font-size:0.8rem;">${p.category}</td>
+                    <td style="text-align:right;">${formatCurrency(p.revB)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsB})</span></td>
+                    <td style="text-align:right;">${formatCurrency(p.revA)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsA})</span></td>
+                    <td style="text-align:right; font-weight:700; color:#009640;">+${formatCurrency(p.diffRev)}</td>
+                    <td style="text-align:right; font-weight:600; color:#009640;">+${p.pct.toFixed(1)}%</td>
+                `;
+                tbodyGains.appendChild(tr);
+            });
+        }
+    }
+
+    // 7. Dynamic Category Filter in Main Table
+    const catSelect = document.getElementById('productCompCategoryFilter');
+    if (catSelect && !catSelect.dataset.populated) {
+        let uniqueCats = new Set();
+        data.forEach(d => {
+            getCategoryNames(d).forEach(c => { if (c) uniqueCats.add(c); });
+        });
+        catSelect.innerHTML = '<option value="">All Categories</option>';
+        Array.from(uniqueCats).sort().forEach(c => {
+            let opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c;
+            catSelect.appendChild(opt);
+        });
+        catSelect.dataset.populated = "true";
+    }
+
+    // Attach Table Filter Input Handlers
+    const compSearch = document.getElementById('productCompSearch');
+    const compImpact = document.getElementById('productCompImpactFilter');
+    const retriggerTable = () => renderProductCompTable(productsList, diffRev);
+
+    if (compSearch && !compSearch.dataset.bound) {
+        compSearch.oninput = retriggerTable;
+        if (catSelect) catSelect.onchange = retriggerTable;
+        if (compImpact) compImpact.onchange = retriggerTable;
+        compSearch.dataset.bound = "true";
+    }
+
+    // Sort Table Headers Binding
+    const bindSortHeader = (id, colName) => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.bound) {
+            el.onclick = () => {
+                if (productCompSortCol === colName) {
+                    productCompSortDir = productCompSortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    productCompSortCol = colName;
+                    productCompSortDir = 'asc';
+                }
+                updateCompSortHeaderSymbols();
+                renderProductCompTable(productsList, diffRev);
+            };
+            el.dataset.bound = "true";
+        }
+    };
+    bindSortHeader('productCompSortSku', 'sku');
+    bindSortHeader('productCompSortName', 'name');
+    bindSortHeader('productCompSortDiff', 'diffRev');
+    bindSortHeader('productCompSortPct', 'pct');
+
+    const updateCompSortHeaderSymbols = () => {
+        const cols = { sku: 'productCompSortSku', name: 'productCompSortName', diffRev: 'productCompSortDiff', pct: 'productCompSortPct' };
+        for (const [col, id] of Object.entries(cols)) {
+            const el = document.getElementById(id);
+            if (el) {
+                let base = el.textContent.split(' ')[0];
+                if (productCompSortCol === col) {
+                    el.textContent = base + (productCompSortDir === 'asc' ? ' ▲' : ' ▼');
+                } else {
+                    el.textContent = base + ' ↕';
+                }
+            }
+        }
+    };
+
+    renderProductCompTable(productsList, diffRev);
+}
+
+function renderProductCompTable(productsList, totalNetDiff) {
+    const tbody = document.querySelector('#productCompTable tbody');
     if (!tbody) return;
-    
-    const prev = getPrevMonth(targetMonth);
-    const yoy = getYoyMonth(targetMonth);
-    const curData = data.filter(d => d['Reporting Month'] === targetMonth);
-    const prevData = data.filter(d => d['Reporting Month'] === prev);
-    const yoyData = data.filter(d => d['Reporting Month'] === yoy);
-    
-    let rows = curData.map(r => {
-        let rKey = getProductKey(r);
-        let pRow = prevData.find(p => getProductKey(p) === rKey) || {};
-        let yRow = yoyData.find(y => getProductKey(y) === rKey) || {};
-        let pRev = pRow['N. Revenue'] || 0;
-        let yRev = yRow['N. Revenue'] || 0;
-        let curRev = r['N. Revenue'] || 0;
-        return {
-            sku: getDisplaySku(r.SKU), name: r['Product title'] || '',
-            units: r['Units'] || 0, revenue: curRev,
-            prevMom: pRev > 0 ? ((curRev - pRev) / pRev) * 100 : 0,
-            yoy: yRev > 0 ? ((curRev - yRev) / yRev) * 100 : 0
-        };
+
+    const compSearch = document.getElementById('productCompSearch');
+    const catSelect = document.getElementById('productCompCategoryFilter');
+    const compImpact = document.getElementById('productCompImpactFilter');
+
+    let filterText = compSearch ? compSearch.value.toLowerCase().trim() : '';
+    let filterCat = catSelect ? catSelect.value : '';
+    let filterImpact = compImpact ? compImpact.value : '';
+
+    let filtered = productsList.filter(p => {
+        if (filterText && !p.sku.toLowerCase().includes(filterText) && !p.name.toLowerCase().includes(filterText)) {
+            return false;
+        }
+        if (filterCat && !p.categories.includes(filterCat)) {
+            return false;
+        }
+        if (filterImpact === 'drops' && p.diffRev >= 0) return false;
+        if (filterImpact === 'gains' && p.diffRev <= 0) return false;
+        return true;
     });
-    
-    // Filter
-    let filterText = filterInput ? filterInput.value.toLowerCase() : '';
-    if (filterText) rows = rows.filter(r => r.sku.toLowerCase().includes(filterText) || r.name.toLowerCase().includes(filterText));
-    
+
     // Sort
-    rows.sort((a, b) => {
-        let va = a[sortState.col], vb = b[sortState.col];
-        if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
-        return sortState.dir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    filtered.sort((a, b) => {
+        let valA = a[productCompSortCol];
+        let valB = b[productCompSortCol];
+
+        if (typeof valA === 'string') {
+            return productCompSortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else {
+            return productCompSortDir === 'asc' ? valA - valB : valB - valA;
+        }
     });
-    
+
+    window.lastFilteredProductCompList = filtered;
+
     tbody.innerHTML = '';
-    rows.slice(0, 50).forEach(r => {
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:#64748B; padding:2rem;">No products match current filters.</td></tr>';
+        return;
+    }
+
+    let absTotalNetDiff = Math.abs(totalNetDiff);
+
+    filtered.forEach((p, idx) => {
         let tr = document.createElement('tr');
-        let pStyle = r.prevMom > 0 ? 'color:#009640' : r.prevMom < 0 ? 'color:#EF4444' : '';
-        let yStyle = r.yoy > 0 ? 'color:#009640' : r.yoy < 0 ? 'color:#EF4444' : '';
-        tr.innerHTML = '<td>' + r.sku + '</td><td>' + r.name + '</td><td>' + r.units + '</td><td>\u00A3' + r.revenue.toLocaleString() + '</td><td style="' + pStyle + '">' + (r.prevMom > 0 ? '+' : '') + r.prevMom.toFixed(1) + '%</td><td style="' + yStyle + '">' + (r.yoy > 0 ? '+' : '') + r.yoy.toFixed(1) + '%</td>';
+        let diffColor = p.diffRev > 0 ? '#009640' : p.diffRev < 0 ? '#DC2626' : '#475569';
+        let diffSign = p.diffRev > 0 ? '+' : '';
+        let pctSign = p.pct > 0 ? '+' : '';
+
+        let shareText = '--';
+        if (absTotalNetDiff > 0 && p.diffRev !== 0) {
+            let shareVal = (p.diffRev / absTotalNetDiff) * 100;
+            shareText = (shareVal >= 0 ? '+' : '') + shareVal.toFixed(1) + '%';
+        }
+
+        tr.innerHTML = `
+            <td style="text-align:center; color:#64748B;">${idx + 1}</td>
+            <td style="font-weight:600;">${p.sku}</td>
+            <td style="font-weight:500;">${p.name}</td>
+            <td style="color:#64748B; font-size:0.85rem;">${p.category}</td>
+            <td style="text-align:right;">${formatCurrency(p.revB)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsB})</span></td>
+            <td style="text-align:right;">${formatCurrency(p.revA)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsA})</span></td>
+            <td style="text-align:right; font-weight:700; color:${diffColor};">${diffSign}${formatCurrency(p.diffRev)}</td>
+            <td style="text-align:right; font-weight:600; color:${diffColor};">${pctSign}${p.pct.toFixed(1)}%</td>
+            <td style="text-align:right; color:#475569; font-weight:500;">${shareText}</td>
+        `;
         tbody.appendChild(tr);
     });
-    
-    // Sort click handlers
-    document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
-        th.onclick = () => {
-            let col = th.getAttribute('data-sort');
-            if (sortState.col === col) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
-            else { sortState.col = col; sortState.dir = 'desc'; }
-            renderProductTable(tableId, filterId, targetMonth, data, sortState, side);
-        };
-    });
-    
-    // Filter handler
-    if (filterInput) {
-        filterInput.oninput = () => renderProductTable(tableId, filterId, targetMonth, data, sortState, side);
+}
+
+function exportProductComparisonCsv() {
+    if (!window.lastFilteredProductCompList || window.lastFilteredProductCompList.length === 0) {
+        alert("No comparison product data to export based on current filters.");
+        return;
     }
+
+    const mA = productCompMonthA;
+    const mB = productCompMonthB;
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += `SKU,Product Name,Category,${formatMonthLabel(mB)} Revenue,${formatMonthLabel(mB)} Units,${formatMonthLabel(mA)} Revenue,${formatMonthLabel(mA)} Units,Net Variance (£),% Change\n`;
+
+    window.lastFilteredProductCompList.forEach(p => {
+        let name = p.name ? p.name.replace(/"/g, '""') : '';
+        let cat = p.category ? p.category.replace(/"/g, '""') : '';
+        csvContent += `"${p.sku}","${name}","${cat}",${p.revB.toFixed(2)},${p.unitsB},${p.revA.toFixed(2)},${p.unitsA},${p.diffRev.toFixed(2)},${p.pct.toFixed(2)}\n`;
+    });
+
+    let encodedUri = encodeURI(csvContent);
+    let link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `product_variance_${mA}_vs_${mB}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 function updateCategoryDashboard() {

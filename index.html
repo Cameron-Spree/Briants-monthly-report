@@ -243,18 +243,193 @@
 
             <!-- Tab 4: Product Performance -->
             <section id="tab-product" class="tab-content">
-                <h2 class="section-title">Product Performance</h2>
+                <h2 class="section-title">Product &amp; Category Performance (Variance Engine)</h2>
                 
-                <div class="card" style="margin-bottom: 2rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3 class="product-category-heading" style="margin: 0;">Product Sales Trend <span class="info-tip" title="Line chart showing revenue and units sold for the selected product (or all products) over the date range. Use the dropdown and arrows to cycle through individual products.">?</span></h3>
+                <!-- Comparison Control & Headline KPI Card -->
+                <div class="card" style="margin-bottom: 1.5rem; border-top: 4px solid #009640;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+                        <div>
+                            <h3 class="product-category-heading" style="margin: 0;">Performance Comparison Controls</h3>
+                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Compare any month against previous year (YoY) or previous month (MoM) to isolate revenue drivers and drops.</p>
+                        </div>
+                        
+                        <!-- Control Bar -->
+                        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; background: #F8FAFC; padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #E2E8F0;">
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Primary Month (A)</label>
+                                <input type="month" id="productCompMonthA" style="padding: 0.35rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
+                            </div>
+                            
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem;">
+                                <span style="font-size: 0.75rem; font-weight: 700; color: #64748B; text-transform: uppercase;">Presets</span>
+                                <div style="display: flex; gap: 0.25rem;">
+                                    <button id="productPresetYoY" class="btn-primary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 4px; height: 30px;">YoY</button>
+                                    <button id="productPresetMoM" class="btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 4px; height: 30px;">MoM</button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Comparison Target (B)</label>
+                                <input type="month" id="productCompMonthB" style="padding: 0.35rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Headline Summary Grid -->
+                    <div class="trend-summary-grid">
+                        <div class="trend-summary-card" style="border-left: 3px solid #009640;">
+                            <span class="trend-summary-label" id="productCompLabelA">Primary Month (A) Rev</span>
+                            <strong class="trend-summary-value" id="productCompRevA">--</strong>
+                        </div>
+                        <div class="trend-summary-card" style="border-left: 3px solid #64748B;">
+                            <span class="trend-summary-label" id="productCompLabelB">Comparison Target (B) Rev</span>
+                            <strong class="trend-summary-value" id="productCompRevB">--</strong>
+                        </div>
+                        <div class="trend-summary-card" id="productCompVarianceCard" style="border-left: 3px solid #373737;">
+                            <span class="trend-summary-label">Net Variance (£)</span>
+                            <strong class="trend-summary-value" id="productCompVarianceDiff">--</strong>
+                        </div>
+                        <div class="trend-summary-card" id="productCompPctCard" style="border-left: 3px solid #373737;">
+                            <span class="trend-summary-label">% Variance</span>
+                            <strong class="trend-summary-value" id="productCompVariancePct">--</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Automated Variance Takeaway & Category Impact Breakdown Card -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 class="product-category-heading" style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>💡</span> Variance Takeaway &amp; Category Drivers
+                    </h3>
+
+                    <div class="dashboard-grid" style="grid-template-columns: 1.1fr 0.9fr; gap: 1.5rem; margin-bottom: 0;">
+                        <!-- Left: Executive Takeaway Text -->
+                        <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 1.25rem; border-left: 5px solid #D97706; display: flex; flex-direction: column; justify-content: center;">
+                            <h4 style="font-weight: 700; font-size: 0.85rem; color: #92400E; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Variance Analysis Summary</h4>
+                            <p id="productVarianceTakeawayText" style="font-size: 0.95rem; color: #78350F; margin: 0; line-height: 1.6;">
+                                Select a date range to generate performance comparison takeaways.
+                            </p>
+                        </div>
+
+                        <!-- Right: Category Revenue Impact List -->
+                        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem;">
+                            <h4 style="font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between;">
+                                <span>Category Impact Breakdown</span>
+                                <span style="font-size: 0.75rem; color: #64748B; font-weight: normal;">Net £ Change</span>
+                            </h4>
+                            <div id="productCategoryVarianceList" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- Dynamically populated -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Drivers Grid (Biggest Drops vs. Biggest Gains) -->
+                <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <!-- Biggest Drops -->
+                    <div class="card" style="border-top: 4px solid #EF4444; margin-bottom: 0;">
+                        <h3 style="color: #DC2626; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <span>📉</span> Top Revenue Drops (The Losers)
+                            <span class="info-tip" title="Products with the largest absolute revenue loss (£) in Month A compared to Month B.">?</span>
+                        </h3>
+                        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                            <table class="data-table" id="productTopDropsTable">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Product Name</th>
+                                        <th>Category</th>
+                                        <th style="text-align: right;" id="hdrDropB">Month B</th>
+                                        <th style="text-align: right;" id="hdrDropA">Month A</th>
+                                        <th style="text-align: right;">£ Drop</th>
+                                        <th style="text-align: right;">% Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Biggest Gains -->
+                    <div class="card" style="border-top: 4px solid #009640; margin-bottom: 0;">
+                        <h3 style="color: #009640; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <span>📈</span> Top Revenue Gains (The Winners)
+                            <span class="info-tip" title="Products with the largest absolute revenue gain (£) in Month A compared to Month B.">?</span>
+                        </h3>
+                        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                            <table class="data-table" id="productTopGainsTable">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Product Name</th>
+                                        <th>Category</th>
+                                        <th style="text-align: right;" id="hdrGainB">Month B</th>
+                                        <th style="text-align: right;" id="hdrGainA">Month A</th>
+                                        <th style="text-align: right;">£ Gain</th>
+                                        <th style="text-align: right;">% Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Unified Product Comparison Table Card -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h3 class="product-category-heading" style="margin: 0;">Complete Product Comparison Table</h3>
+                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Detailed product-by-product comparison between Month A and Month B.</p>
+                        </div>
+
+                        <!-- Filters for Table -->
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                            <input type="text" id="productCompSearch" placeholder="Search SKU or Product Name..." style="padding: 0.45rem 0.6rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; min-width: 220px;">
+                            <select id="productCompCategoryFilter" style="padding: 0.45rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
+                                <option value="">All Categories</option>
+                            </select>
+                            <select id="productCompImpactFilter" style="padding: 0.45rem; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; font-size: 0.85rem; background: white;">
+                                <option value="">All Products</option>
+                                <option value="drops">Only Drops (-£)</option>
+                                <option value="gains">Only Gains (+£)</option>
+                            </select>
+                            <button onclick="exportProductComparisonCsv()" class="btn-secondary" style="padding: 0.45rem 0.8rem; font-size: 0.85rem; height: 34px;">⬇ CSV Export</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+                        <table class="data-table" id="productCompTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 45px; text-align: center;">Rank</th>
+                                    <th style="cursor: pointer;" id="productCompSortSku">SKU ↕</th>
+                                    <th style="cursor: pointer;" id="productCompSortName">Product Name ↕</th>
+                                    <th>Category</th>
+                                    <th style="text-align: right;" id="hdrTableB">Month B Rev (Units)</th>
+                                    <th style="text-align: right;" id="hdrTableA">Month A Rev (Units)</th>
+                                    <th style="cursor: pointer; text-align: right;" id="productCompSortDiff">£ Variance ↕</th>
+                                    <th style="cursor: pointer; text-align: right;" id="productCompSortPct">% Change ↕</th>
+                                    <th style="text-align: right;">Share of Net Var</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Historical Single Product Trend Selector (Bottom Card) -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+                        <div>
+                            <h3 class="product-category-heading" style="margin: 0;">Individual Product Sales Trend (24-Month History)</h3>
+                            <p style="font-size: 0.85rem; color: #64748B; margin-top: 0.2rem;">Select any SKU to view its multi-year monthly revenue and volume trend.</p>
+                        </div>
                         <div style="display: flex; flex-direction: column; gap: 0.4rem; min-width: 320px;">
                             <div style="display: flex; gap: 0.4rem;">
                                 <input type="text" id="productSearch" placeholder="Filter by Name/SKU..." style="flex: 2; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
                                 <input type="number" id="productMinRev" placeholder="Min £" title="Min Revenue" style="flex: 1; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem; min-width: 60px;">
                                 <input type="number" id="productMaxRev" placeholder="Max £" title="Max Revenue" style="flex: 1; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem; min-width: 60px;">
-                                <input type="number" id="productMinUnits" placeholder="Min Qty" title="Min Units" style="flex: 1; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem; min-width: 60px;">
-                                <input type="number" id="productMaxUnits" placeholder="Max Qty" title="Max Units" style="flex: 1; padding: 0.4rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem; min-width: 60px;">
                             </div>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 <button id="productPrevBtn" class="nav-arrow-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px; cursor: pointer; border: 1px solid #E2E8F0; border-radius: 4px; background: #fff; font-weight: 700;" title="Previous">&lt;</button>
@@ -262,7 +437,6 @@
                                     <option value="__ALL__">All Products (Total Revenue)</option>
                                 </select>
                                 <button id="productNextBtn" class="nav-arrow-btn" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; min-width: 32px; cursor: pointer; border: 1px solid #E2E8F0; border-radius: 4px; background: #fff; font-weight: 700;" title="Next">&gt;</button>
-                                <button onclick="exportFilteredProducts()" class="btn-secondary" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; margin: 0; white-space: nowrap;">⬇ CSV</button>
                             </div>
                         </div>
                     </div>
@@ -286,72 +460,6 @@
                     </div>
                     <div class="chart-container" style="height: 300px;">
                         <canvas id="productTrendChart"></canvas>
-                    </div>
-                </div>
-                
-                <!-- Two side-by-side comparison tables -->
-                <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                    <!-- Table A -->
-                    <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 class="product-category-heading" style="margin: 0;">Top Performers</h3>
-                            <input type="month" id="productTableMonthA" style="padding: 0.3rem; border: 1px solid #E2E8F0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
-                        </div>
-                        <input type="text" id="productFilterA" placeholder="Filter by SKU or name..." style="width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #E2E8F0; border-radius: 4px; margin-bottom: 0.75rem; font-family: inherit; font-size: 0.85rem; box-sizing: border-box;">
-                        <div class="table-container" style="max-height: 600px; overflow-y: auto;">
-                            <table class="data-table sortable-table" id="productTableA">
-                                <thead>
-                                    <tr>
-                                        <th data-sort="sku" style="cursor:pointer;">SKU &#x25B2;&#x25BC;</th>
-                                        <th data-sort="name" style="cursor:pointer;">Product &#x25B2;&#x25BC;</th>
-                                        <th data-sort="units" style="cursor:pointer;">Units &#x25B2;&#x25BC;</th>
-                                        <th data-sort="revenue" style="cursor:pointer;">Revenue &#x25B2;&#x25BC;</th>
-                                        <th data-sort="prevMom" style="cursor:pointer;">Prev M % &#x25B2;&#x25BC;</th>
-                                        <th data-sort="yoy" style="cursor:pointer;">YoY % &#x25B2;&#x25BC;</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <!-- Table B -->
-                    <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 class="product-category-heading" style="margin: 0;">Top Performers</h3>
-                            <input type="month" id="productTableMonthB" style="padding: 0.3rem; border: 1px solid #E2EF0; border-radius: 4px; font-family: inherit; font-size: 0.85rem;">
-                        </div>
-                        <input type="text" id="productFilterB" placeholder="Filter by SKU or name..." style="width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #E2E8F0; border-radius: 4px; margin-bottom: 0.75rem; font-family: inherit; font-size: 0.85rem; box-sizing: border-box;">
-                        <div class="table-container" style="max-height: 600px; overflow-y: auto;">
-                            <table class="data-table sortable-table" id="productTableB">
-                                <thead>
-                                    <tr>
-                                        <th data-sort="sku" style="cursor:pointer;">SKU &#x25B2;&#x25BC;</th>
-                                        <th data-sort="name" style="cursor:pointer;">Product &#x25B2;&#x25BC;</th>
-                                        <th data-sort="units" style="cursor:pointer;">Units &#x25B2;&#x25BC;</th>
-                                        <th data-sort="revenue" style="cursor:pointer;">Revenue &#x25B2;&#x25BC;</th>
-                                        <th data-sort="prevMom" style="cursor:pointer;">Prev M % &#x25B2;&#x25BC;</th>
-                                        <th data-sort="yoy" style="cursor:pointer;">YoY % &#x25B2;&#x25BC;</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Rising & Falling Stars -->
-                <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
-                    <div class="card">
-                        <h3 style="color: #009640;">&#x1F4C8; Rising Stars (Biggest Â£ Gains) <span class="info-tip" title="Products with the largest absolute revenue increase between the previous month and the current month.">?</span></h3>
-                        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
-                            <table class="data-table" id="productRisingStars"><thead><tr><th>SKU</th><th>Product</th><th>Prev Rev</th><th>Cur Rev</th><th>Â£ Change</th></tr></thead><tbody></tbody></table>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3 style="color: #EF4444;">&#x1F4C9; Falling Stars (Biggest Â£ Drops) <span class="info-tip" title="Products with the largest absolute revenue decrease between the previous month and the current month.">?</span></h3>
-                        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
-                            <table class="data-table" id="productFallingStars"><thead><tr><th>SKU</th><th>Product</th><th>Prev Rev</th><th>Cur Rev</th><th>Â£ Change</th></tr></thead><tbody></tbody></table>
-                        </div>
                     </div>
                 </div>
             </section>
