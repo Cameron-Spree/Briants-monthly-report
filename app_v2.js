@@ -1874,10 +1874,11 @@ function renderProductVarianceEngine(data) {
         productsList.push(p);
     });
 
-    // 2. Group by Category
+    // 2. Group by Category (filtering out NULL and Uncategorized)
     let categoryMap = new Map();
     productsList.forEach(p => {
         p.categories.forEach(cat => {
+            if (!cat || cat.trim() === '' || cat.toUpperCase() === 'NULL' || cat.toLowerCase() === 'uncategorized') return;
             if (!categoryMap.has(cat)) {
                 categoryMap.set(cat, { catName: cat, revA: 0, revB: 0, diffRev: 0 });
             }
