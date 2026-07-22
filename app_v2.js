@@ -213,18 +213,26 @@ LEFT JOIN wp_posts parent_p
 LEFT JOIN wp_posts var_p
     ON var_p.ID = opl.variation_id
    AND opl.variation_id > 0
-LEFT JOIN wp_postmeta pm_sku
+LEFT JOIN (
+    SELECT post_id, MAX(meta_value) AS meta_value
+    FROM wp_postmeta
+    WHERE meta_key = '_sku'
+    GROUP BY post_id
+) pm_sku
     ON pm_sku.post_id = CASE
         WHEN opl.variation_id > 0 THEN opl.variation_id
         ELSE opl.product_id
     END
-   AND pm_sku.meta_key = '_sku'
-LEFT JOIN wp_postmeta pm_price
+LEFT JOIN (
+    SELECT post_id, MAX(meta_value) AS meta_value
+    FROM wp_postmeta
+    WHERE meta_key = '_price'
+    GROUP BY post_id
+) pm_price
     ON pm_price.post_id = CASE
         WHEN opl.variation_id > 0 THEN opl.variation_id
         ELSE opl.product_id
     END
-   AND pm_price.meta_key = '_price'
 WHERE os.status NOT IN ('wc-pending', 'wc-cancelled', 'wc-refunded', 'wc-failed', 'trash', 'wc-trash')
   AND opl.date_created >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
 GROUP BY
