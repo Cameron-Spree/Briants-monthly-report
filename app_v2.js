@@ -1785,6 +1785,45 @@ function renderProductTrendChart(skuKey, data, months) {
     renderLineChart('productTrendChart', months.map(formatMonthLabel), { label: 'Net Revenue (\u00A3)', data: chartData, color: '#009640' });
 }
 
+function findNearestHistoricalSale(data, productKey, targetMonthStr) {
+    if (!data || !productKey || !targetMonthStr) return null;
+    let matches = data.filter(d => {
+        let key = getProductKey(d);
+        let u = Number(d['Units']) || 0;
+        let r = Number(d['N. Revenue']) || 0;
+        return key === productKey && u > 0 && r > 0;
+    });
+
+    if (matches.length === 0) return null;
+
+    let parts = targetMonthStr.split('-');
+    if (parts.length < 2) return null;
+    let targetIdx = Number(parts[0]) * 12 + Number(parts[1]);
+
+    let bestMatch = null;
+    let minDiff = Infinity;
+
+    matches.forEach(m => {
+        let mStr = m['Reporting Month'];
+        if (!mStr) return;
+        let mParts = mStr.split('-');
+        if (mParts.length < 2) return;
+        let idx = Number(mParts[0]) * 12 + Number(mParts[1]);
+        let diff = Math.abs(idx - targetIdx);
+        if (diff < minDiff) {
+            minDiff = diff;
+            bestMatch = {
+                monthStr: mStr,
+                units: Number(m['Units']),
+                rev: Number(m['N. Revenue']),
+                avgPrice: Number(m['N. Revenue']) / Number(m['Units'])
+            };
+        }
+    });
+
+    return bestMatch;
+}
+
 function renderProductVarianceEngine(data) {
     const mA = productCompMonthA;
     const mB = productCompMonthB;
@@ -1887,12 +1926,49 @@ function renderProductVarianceEngine(data) {
         p.diffUnits = p.unitsA - p.unitsB;
         p.pct = p.revB > 0 ? ((p.revA - p.revB) / p.revB * 100) : (p.revA > 0 ? 100 : 0);
 
-        let priceB = p.unitsB > 0 ? (p.revB / p.unitsB) : (p.catalogPrice || 0);
-        let priceA = p.unitsA > 0 ? (p.revA / p.unitsA) : (p.catalogPrice || priceB || 0);
+        // Smart Nearest Historical Sale Price Lookup
+        let priceB = null;
+        let priceBLabel = '';
+        if (p.unitsB > 0) {
+            priceB = p.revB / p.unitsB;
+        } else {
+            let nearestB = findNearestHistoricalSale(data, p.key, mB);
+            if (nearestB) {
+                priceB = nearestB.avgPrice;
+                priceBLabel = ` (${formatMonthLabel(nearestB.monthStr)})`;
+            } else if (p.catalogPrice > 0) {
+                priceB = p.catalogPrice;
+                priceBLabel = ' (Cat.)';
+            }
+        }
+
+        let priceA = null;
+        let priceALabel = '';
+        if (p.unitsA > 0) {
+            priceA = p.revA / p.unitsA;
+        } else {
+            let nearestA = findNearestHistoricalSale(data, p.key, mA);
+            if (nearestA) {
+                priceA = nearestA.avgPrice;
+                priceALabel = ` (${formatMonthLabel(nearestA.monthStr)})`;
+            } else if (p.catalogPrice > 0) {
+                priceA = p.catalogPrice;
+                priceALabel = ' (Cat.)';
+            }
+        }
+
         p.priceB = priceB;
+        p.priceBLabel = priceBLabel;
         p.priceA = priceA;
-        p.priceDiff = priceA - priceB;
-        p.pricePct = priceB > 0 ? ((priceA - priceB) / priceB * 100) : 0;
+        p.priceALabel = priceALabel;
+
+        if (priceB !== null && priceA !== null && priceB > 0) {
+            p.priceDiff = priceA - priceB;
+            p.pricePct = ((priceA - priceB) / priceB) * 100;
+        } else {
+            p.priceDiff = null;
+            p.pricePct = null;
+        }
 
         p.unitsPct = p.unitsB > 0 ? ((p.unitsA - p.unitsB) / p.unitsB * 100) : (p.unitsA > 0 ? 100 : -100);
 
@@ -2253,9 +2329,24 @@ function renderProductCompTable(productsList, totalNetDiff) {
         let diffSign = p.diffRev > 0 ? '+' : '';
         let pctSign = p.pct > 0 ? '+' : '';
 
-        let priceStr = p.priceB > 0 || p.priceA > 0 ? `${formatCurrency(p.priceB)} → ${formatCurrency(p.priceA)}` : 'N/A';
-        let priceSign = p.pricePct > 0 ? '+' : '';
-        let priceStyle = p.pricePct > 0 ? 'color:#D97706;' : p.pricePct < 0 ? 'color:#059669;' : 'color:#64748B;';
+        let priceStr = 'N/A';
+        if (p.priceB !== null && p.priceA !== null) {
+            let pBStr = formatCurrency(p.priceB) + (p.unitsB === 0 ? `<span style="font-size:0.72rem; color:#64748B;">${p.priceBLabel}</span>` : '');
+            let pAStr = formatCurrency(p.priceA) + (p.unitsA === 0 ? `<span style="font-size:0.72rem; color:#64748B;">${p.priceALabel}</span>` : '');
+            priceStr = `${pBStr} → ${pAStr}`;
+            
+            if (p.pricePct !== null) {
+                let priceSign = p.pricePct > 0 ? '+' : '';
+                let priceStyle = p.pricePct > 0 ? 'color:#D97706;' : p.pricePct < 0 ? 'color:#059669;' : 'color:#64748B;';
+                priceStr += ` <span style="${priceStyle}">(${priceSign}${p.pricePct.toFixed(1)}%)</span>`;
+            }
+        } else if (p.priceA !== null) {
+            let pAStr = formatCurrency(p.priceA) + (p.unitsA === 0 ? `<span style="font-size:0.72rem; color:#64748B;">${p.priceALabel}</span>` : '');
+            priceStr = `N/A → ${pAStr}`;
+        } else if (p.priceB !== null) {
+            let pBStr = formatCurrency(p.priceB) + (p.unitsB === 0 ? `<span style="font-size:0.72rem; color:#64748B;">${p.priceBLabel}</span>` : '');
+            priceStr = `${pBStr} → N/A`;
+        }
 
         let volumeStr = `${p.unitsB} → ${p.unitsA}`;
         let volumeSign = p.unitsPct > 0 ? '+' : '';
@@ -2268,7 +2359,7 @@ function renderProductCompTable(productsList, totalNetDiff) {
             <td style="color:#64748B; font-size:0.85rem;">${p.category}</td>
             <td style="text-align:right;">${formatCurrency(p.revB)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsB})</span></td>
             <td style="text-align:right;">${formatCurrency(p.revA)} <span style="color:#64748B; font-size:0.75rem;">(${p.unitsA})</span></td>
-            <td style="text-align:right; font-size:0.85rem;">${priceStr} <span style="${priceStyle}">(${priceSign}${p.pricePct.toFixed(1)}%)</span></td>
+            <td style="text-align:right; font-size:0.85rem;">${priceStr}</td>
             <td style="text-align:right; font-size:0.85rem;">${volumeStr} <span style="${volumeStyle}">(${volumeSign}${p.unitsPct.toFixed(1)}%)</span></td>
             <td style="text-align:right; font-weight:700; color:${diffColor};">${diffSign}${formatCurrency(p.diffRev)}</td>
             <td style="text-align:right; font-weight:600; color:${diffColor};">${pctSign}${p.pct.toFixed(1)}%</td>
