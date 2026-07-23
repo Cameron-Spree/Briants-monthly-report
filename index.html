@@ -34,7 +34,7 @@
             <input type="file" id="csvFileInput" accept=".csv" multiple />
             <label for="csvFileInput" class="btn-primary">Upload CSV Data</label>
             <span id="uploadStatus">No files uploaded</span>
-            <button class="btn-primary" onclick="exportFullReport()" style="margin-left: 1rem; background-color: #373737;">📋 Export Report</button>
+            <button class="btn-primary" onclick="openExportReportModal()" style="margin-left: 1rem; background-color: #373737;">📋 Export Report</button>
         </div>
     </header>
 
@@ -985,6 +985,260 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- Export Configurator Modal Overlay -->
+    <div id="exportModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 9999; justify-content: center; align-items: center; padding: 1.5rem;">
+        <div style="background: white; border-radius: 12px; max-width: 950px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2), 0 10px 10px -5px rgba(0,0,0,0.1); border: 1px solid #CBD5E1; overflow: hidden;">
+            
+            <!-- Modal Header -->
+            <div style="padding: 1.25rem 1.75rem; background: #1E293B; color: white; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155;">
+                <div>
+                    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>📋</span> Custom Export Report Configurator
+                    </h2>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 0.85rem; color: #94A3B8;">Select sections, adjust timeframes and filters independently, and preview data impacts before exporting.</p>
+                </div>
+                <button onclick="closeExportReportModal()" style="background: transparent; border: none; color: #94A3B8; font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 0.2rem 0.5rem;" title="Close Modal">&times;</button>
+            </div>
+
+            <!-- Toolbar / Presets Bar -->
+            <div style="padding: 0.75rem 1.75rem; background: #F8FAFC; border-bottom: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span style="font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase;">Quick Selection:</span>
+                    <button class="btn-secondary" onclick="exportModalSelectAll(true)" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; height: 28px;">Select All</button>
+                    <button class="btn-secondary" onclick="exportModalSelectAll(false)" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; height: 28px;">Deselect All</button>
+                </div>
+                <div>
+                    <button class="btn-secondary" onclick="exportModalSyncDashboardState()" style="padding: 0.25rem 0.75rem; font-size: 0.78rem; height: 28px; background: #EFF6FF; border-color: #BFDBFE; color: #1D4ED8; font-weight: 600;">
+                        🔄 Sync All to Live Dashboard Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Sections Body -->
+            <div style="padding: 1.5rem 1.75rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.25rem; background: #F1F5F9;">
+                
+                <!-- Section 1: Executive Summary -->
+                <div class="card" style="margin: 0; padding: 1.25rem; border-top: 4px solid #009640;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 700; font-size: 1rem; color: #1E293B;">
+                            <input type="checkbox" id="expCheck_executive" checked style="width: 18px; height: 18px; accent-color: #009640;">
+                            <span>📊 1. Executive Summary</span>
+                        </label>
+                        <span id="expBadge_executive" style="font-size: 0.78rem; font-weight: 600; background: #DCFCE7; color: #166534; padding: 0.25rem 0.6rem; border-radius: 9999px; border: 1px solid #BBF7D0;">
+                            Live Preview Loading...
+                        </span>
+                    </div>
+                    <div id="expBody_executive" style="display: flex; gap: 1rem; flex-wrap: wrap; background: #F8FAFC; padding: 0.75rem; border-radius: 6px; border: 1px solid #E2E8F0; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Date Range From:</label>
+                            <input type="month" id="expFrom_executive" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">To:</label>
+                            <input type="month" id="expTo_executive" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Customer Split -->
+                <div class="card" style="margin: 0; padding: 1.25rem; border-top: 4px solid #2563EB;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 700; font-size: 1rem; color: #1E293B;">
+                            <input type="checkbox" id="expCheck_customer" checked style="width: 18px; height: 18px; accent-color: #2563EB;">
+                            <span>👥 2. Customer Split &amp; AI Acquisition</span>
+                        </label>
+                        <span id="expBadge_customer" style="font-size: 0.78rem; font-weight: 600; background: #DBEAFE; color: #1E40AF; padding: 0.25rem 0.6rem; border-radius: 9999px; border: 1px solid #BFDBFE;">
+                            Live Preview Loading...
+                        </span>
+                    </div>
+                    <div id="expBody_customer" style="display: flex; gap: 1rem; flex-wrap: wrap; background: #F8FAFC; padding: 0.75rem; border-radius: 6px; border: 1px solid #E2E8F0; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Month A:</label>
+                            <input type="month" id="expMonthA_customer" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Month B:</label>
+                            <input type="month" id="expMonthB_customer" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem; margin-left: auto;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Trend Range From:</label>
+                            <input type="month" id="expFrom_customer" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                            <span style="font-size: 0.8rem; color: #64748B;">to</span>
+                            <input type="month" id="expTo_customer" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Shipping & Delivery -->
+                <div class="card" style="margin: 0; padding: 1.25rem; border-top: 4px solid #D97706;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 700; font-size: 1rem; color: #1E293B;">
+                            <input type="checkbox" id="expCheck_shipping" checked style="width: 18px; height: 18px; accent-color: #D97706;">
+                            <span>🚚 3. Shipping &amp; Delivery</span>
+                        </label>
+                        <span id="expBadge_shipping" style="font-size: 0.78rem; font-weight: 600; background: #FEF3C7; color: #92400E; padding: 0.25rem 0.6rem; border-radius: 9999px; border: 1px solid #FDE68A;">
+                            Live Preview Loading...
+                        </span>
+                    </div>
+                    <div id="expBody_shipping" style="display: flex; gap: 1rem; flex-wrap: wrap; background: #F8FAFC; padding: 0.75rem; border-radius: 6px; border: 1px solid #E2E8F0; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Month A:</label>
+                            <input type="month" id="expMonthA_shipping" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Month B:</label>
+                            <input type="month" id="expMonthB_shipping" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem; margin-left: auto;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Trend Range From:</label>
+                            <input type="month" id="expFrom_shipping" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                            <span style="font-size: 0.8rem; color: #64748B;">to</span>
+                            <input type="month" id="expTo_shipping" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Product Performance -->
+                <div class="card" style="margin: 0; padding: 1.25rem; border-top: 4px solid #009640;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 700; font-size: 1rem; color: #1E293B;">
+                            <input type="checkbox" id="expCheck_product" checked style="width: 18px; height: 18px; accent-color: #009640;">
+                            <span>📦 4. Product Performance &amp; Variance Engine</span>
+                        </label>
+                        <span id="expBadge_product" style="font-size: 0.78rem; font-weight: 600; background: #DCFCE7; color: #166534; padding: 0.25rem 0.6rem; border-radius: 9999px; border: 1px solid #BBF7D0;">
+                            Live Preview Loading...
+                        </span>
+                    </div>
+                    <div id="expBody_product" style="display: flex; flex-direction: column; gap: 0.75rem; background: #F8FAFC; padding: 0.75rem; border-radius: 6px; border: 1px solid #E2E8F0;">
+                        <!-- Mode & Quick Presets -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <span style="font-size: 0.78rem; font-weight: 700; color: #475569;">Mode:</span>
+                                <button id="expProdBtnSingle" class="btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; height: 24px;">Single Month</button>
+                                <button id="expProdBtnRange" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; height: 24px;">Multi-Month Range</button>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <label style="font-size: 0.78rem; font-weight: 700; color: #475569;">Category Filter:</label>
+                                <select id="expCategory_product" style="padding: 0.25rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                    <option value="">All Categories</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Single Pickers -->
+                        <div id="expProdSingleRow" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                            <div>
+                                <label style="font-size: 0.78rem; font-weight: 600; color: #475569;">Primary Month (A):</label>
+                                <input type="month" id="expMonthA_product" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.78rem; font-weight: 600; color: #475569;">Target Month (B):</label>
+                                <input type="month" id="expMonthB_product" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                            </div>
+                        </div>
+
+                        <!-- Multi-Month Range Pickers -->
+                        <div id="expProdRangeRow" style="display: none; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 700; color: #009640;">Period A Range:</label>
+                                <div style="display: flex; gap: 0.3rem; align-items: center;">
+                                    <input type="month" id="expStartA_product" style="padding: 0.25rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                    <span style="font-size: 0.8rem; color: #64748B;">to</span>
+                                    <input type="month" id="expEndA_product" style="padding: 0.25rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                </div>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 700; color: #64748B;">Period B Target Range:</label>
+                                <div style="display: flex; gap: 0.3rem; align-items: center;">
+                                    <input type="month" id="expStartB_product" style="padding: 0.25rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                    <span style="font-size: 0.8rem; color: #64748B;">to</span>
+                                    <input type="month" id="expEndB_product" style="padding: 0.25rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 5: Category Performance -->
+                <div class="card" style="margin: 0; padding: 1.25rem; border-top: 4px solid #7C3AED;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 700; font-size: 1rem; color: #1E293B;">
+                            <input type="checkbox" id="expCheck_category" checked style="width: 18px; height: 18px; accent-color: #7C3AED;">
+                            <span>🏷️ 5. Category Performance</span>
+                        </label>
+                        <span id="expBadge_category" style="font-size: 0.78rem; font-weight: 600; background: #F3E8FF; color: #6B21A8; padding: 0.25rem 0.6rem; border-radius: 9999px; border: 1px solid #E9D5FF;">
+                            Live Preview Loading...
+                        </span>
+                    </div>
+                    <div id="expBody_category" style="display: flex; gap: 1rem; flex-wrap: wrap; background: #F8FAFC; padding: 0.75rem; border-radius: 6px; border: 1px solid #E2E8F0; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Month A:</label>
+                            <input type="month" id="expMonthA_category" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Month B:</label>
+                            <input type="month" id="expMonthB_category" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 6: Basket Analysis -->
+                <div class="card" style="margin: 0; padding: 1.25rem; border-top: 4px solid #059669;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 700; font-size: 1rem; color: #1E293B;">
+                            <input type="checkbox" id="expCheck_basket" checked style="width: 18px; height: 18px; accent-color: #059669;">
+                            <span>🧺 6. Basket Analysis &amp; Product Cross-Selling</span>
+                        </label>
+                        <span id="expBadge_basket" style="font-size: 0.78rem; font-weight: 600; background: #D1FAE5; color: #065F46; padding: 0.25rem 0.6rem; border-radius: 9999px; border: 1px solid #A7F3D0;">
+                            Live Preview Loading...
+                        </span>
+                    </div>
+                    <div id="expBody_basket" style="display: flex; gap: 1rem; flex-wrap: wrap; background: #F8FAFC; padding: 0.75rem; border-radius: 6px; border: 1px solid #E2E8F0; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Range From:</label>
+                            <input type="month" id="expFrom_basket" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                            <span style="font-size: 0.8rem; color: #64748B;">to</span>
+                            <input type="month" id="expTo_basket" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 7: Payment Methods -->
+                <div class="card" style="margin: 0; padding: 1.25rem; border-top: 4px solid #4F46E5;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 700; font-size: 1rem; color: #1E293B;">
+                            <input type="checkbox" id="expCheck_payment" checked style="width: 18px; height: 18px; accent-color: #4F46E5;">
+                            <span>💳 7. Payment Methods &amp; Gateway Split</span>
+                        </label>
+                        <span id="expBadge_payment" style="font-size: 0.78rem; font-weight: 600; background: #E0E7FF; color: #3730A3; padding: 0.25rem 0.6rem; border-radius: 9999px; border: 1px solid #C7D2FE;">
+                            Live Preview Loading...
+                        </span>
+                    </div>
+                    <div id="expBody_payment" style="display: flex; gap: 1rem; flex-wrap: wrap; background: #F8FAFC; padding: 0.75rem; border-radius: 6px; border: 1px solid #E2E8F0; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Month A:</label>
+                            <input type="month" id="expMonthA_payment" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Month B:</label>
+                            <input type="month" id="expMonthB_payment" style="padding: 0.3rem; border: 1px solid #CBD5E1; border-radius: 4px; font-size: 0.8rem; background: white;">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div style="padding: 1rem 1.75rem; background: white; border-top: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center;">
+                <button class="btn-secondary" onclick="closeExportReportModal()" style="padding: 0.5rem 1.25rem; font-size: 0.88rem;">Cancel</button>
+                <button id="expRunBtn" class="btn-primary" onclick="executeCustomExportReport()" style="padding: 0.55rem 1.5rem; font-size: 0.92rem; background: #009640; border-color: #009640; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>🚀</span> Generate Custom Report
+                </button>
+            </div>
+
+        </div>
     </div>
 
     <!-- Version Number -->

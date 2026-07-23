@@ -1262,56 +1262,366 @@ function getChartAnnotationsConfigs(labels) {
     };
 }
 
-// ===== FULL REPORT EXPORT =====
-async function exportFullReport() {
-    const exportBtn = document.querySelector('button[onclick="exportFullReport()"]');
-    const originalBtnText = exportBtn ? exportBtn.innerHTML : '📋 Export Report';
-    if (exportBtn) {
-        exportBtn.innerHTML = '⏳ Exporting...';
-        exportBtn.disabled = true;
+// ===== EXPORT CONFIGURATOR MODAL & CUSTOM REPORT GENERATION =====
+
+function openExportReportModal() {
+    const modal = document.getElementById('exportModalOverlay');
+    if (!modal) return;
+
+    // Populate Category dropdown
+    const catSelect = document.getElementById('expCategory_product');
+    if (catSelect && appData.product) {
+        let uniqueCats = new Set();
+        appData.product.forEach(d => {
+            getCategoryNames(d).forEach(c => { if (c) uniqueCats.add(c); });
+        });
+        catSelect.innerHTML = '<option value="">All Categories</option>';
+        Array.from(uniqueCats).sort().forEach(c => {
+            let opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c;
+            catSelect.appendChild(opt);
+        });
     }
 
-    // Tab definitions with charts and tables
-    const tabs = [
+    // Bind Product Mode buttons inside modal
+    const btnSingle = document.getElementById('expProdBtnSingle');
+    const btnRange = document.getElementById('expProdBtnRange');
+    const rowSingle = document.getElementById('expProdSingleRow');
+    const rowRange = document.getElementById('expProdRangeRow');
+
+    const setExportProdMode = (mode) => {
+        productCompRangeMode = mode;
+        if (mode === 'range') {
+            if (btnSingle) btnSingle.className = 'btn-secondary';
+            if (btnRange) btnRange.className = 'btn-primary';
+            if (rowSingle) rowSingle.style.display = 'none';
+            if (rowRange) rowRange.style.display = 'flex';
+        } else {
+            if (btnSingle) btnSingle.className = 'btn-primary';
+            if (btnRange) btnRange.className = 'btn-secondary';
+            if (rowSingle) rowSingle.style.display = 'flex';
+            if (rowRange) rowRange.style.display = 'none';
+        }
+        updateSectionExportPreview('product');
+    };
+
+    if (btnSingle) btnSingle.onclick = () => setExportProdMode('single');
+    if (btnRange) btnRange.onclick = () => setExportProdMode('range');
+
+    // Pre-fill from current dashboard state
+    exportModalSyncDashboardState();
+
+    // Bind auto-update preview on any input change inside modal
+    const keys = ['executive', 'customer', 'shipping', 'product', 'category', 'basket', 'payment'];
+    keys.forEach(k => {
+        const body = document.getElementById('expBody_' + k);
+        if (body) {
+            body.querySelectorAll('input, select').forEach(input => {
+                input.onchange = () => updateSectionExportPreview(k);
+                input.oninput = () => updateSectionExportPreview(k);
+            });
+        }
+    });
+
+    modal.style.display = 'flex';
+}
+
+function closeExportReportModal() {
+    const modal = document.getElementById('exportModalOverlay');
+    if (modal) modal.style.display = 'none';
+}
+
+function exportModalSelectAll(shouldCheck) {
+    const keys = ['executive', 'customer', 'shipping', 'product', 'category', 'basket', 'payment'];
+    keys.forEach(k => {
+        const chk = document.getElementById('expCheck_' + k);
+        if (chk) chk.checked = shouldCheck;
+    });
+}
+
+function exportModalSyncDashboardState() {
+    const defA = productCompMonthA || getMonthsInRange()[getMonthsInRange().length - 1] || '2026-07';
+    const defB = productCompMonthB || getYoyMonth(defA);
+
+    // Executive
+    setInputValue('expFrom_executive', dateRangeFrom);
+    setInputValue('expTo_executive', dateRangeTo);
+
+    // Customer
+    setInputValue('expMonthA_customer', customerMonthA || defA);
+    setInputValue('expMonthB_customer', customerMonthB || defB);
+    setInputValue('expFrom_customer', dateRangeFrom);
+    setInputValue('expTo_customer', dateRangeTo);
+
+    // Shipping
+    setInputValue('expMonthA_shipping', shippingMonthA || defA);
+    setInputValue('expMonthB_shipping', shippingMonthB || defB);
+    setInputValue('expFrom_shipping', dateRangeFrom);
+    setInputValue('expTo_shipping', dateRangeTo);
+
+    // Product
+    setInputValue('expMonthA_product', productCompMonthA || defA);
+    setInputValue('expMonthB_product', productCompMonthB || defB);
+    setInputValue('expStartA_product', productCompStartA || `${defA.split('-')[0]}-05`);
+    setInputValue('expEndA_product', productCompEndA || `${defA.split('-')[0]}-08`);
+    setInputValue('expStartB_product', productCompStartB || `${Number(defA.split('-')[0]) - 1}-05`);
+    setInputValue('expEndB_product', productCompEndB || `${Number(defA.split('-')[0]) - 1}-08`);
+
+    const btnSingle = document.getElementById('expProdBtnSingle');
+    const btnRange = document.getElementById('expProdBtnRange');
+    const rowSingle = document.getElementById('expProdSingleRow');
+    const rowRange = document.getElementById('expProdRangeRow');
+    if (productCompRangeMode === 'range') {
+        if (btnSingle) btnSingle.className = 'btn-secondary';
+        if (btnRange) btnRange.className = 'btn-primary';
+        if (rowSingle) rowSingle.style.display = 'none';
+        if (rowRange) rowRange.style.display = 'flex';
+    } else {
+        if (btnSingle) btnSingle.className = 'btn-primary';
+        if (btnRange) btnRange.className = 'btn-secondary';
+        if (rowSingle) rowSingle.style.display = 'flex';
+        if (rowRange) rowRange.style.display = 'none';
+    }
+
+    // Category
+    setInputValue('expMonthA_category', categoryTableMonthA || defA);
+    setInputValue('expMonthB_category', categoryTableMonthB || defB);
+
+    // Basket
+    setInputValue('expFrom_basket', dateRangeFrom);
+    setInputValue('expTo_basket', dateRangeTo);
+
+    // Payment
+    setInputValue('expMonthA_payment', paymentMonthA || defA);
+    setInputValue('expMonthB_payment', paymentMonthB || defB);
+
+    // Update previews
+    const keys = ['executive', 'customer', 'shipping', 'product', 'category', 'basket', 'payment'];
+    keys.forEach(updateSectionExportPreview);
+}
+
+function setInputValue(id, val) {
+    const el = document.getElementById(id);
+    if (el && val) el.value = val;
+}
+
+function updateSectionExportPreview(secKey) {
+    const badge = document.getElementById('expBadge_' + secKey);
+    if (!badge) return;
+
+    if (secKey === 'executive') {
+        const fromVal = document.getElementById('expFrom_executive')?.value || dateRangeFrom;
+        const toVal = document.getElementById('expTo_executive')?.value || dateRangeTo;
+        let months = getMonthArrayBetween(fromVal, toVal);
+        let rows = (appData.executive || []).filter(d => months.includes(d['Reporting Month']));
+        let rev = rows.reduce((s, r) => s + (Number(r.total_revenue) || Number(r['Revenue']) || 0), 0);
+        let orders = rows.reduce((s, r) => s + (Number(r.total_orders) || Number(r['Orders']) || 0), 0);
+        badge.textContent = `${formatMonthLabel(fromVal)}–${formatMonthLabel(toVal)} | Net Rev: ${formatCurrency(rev)} | Orders: ${formatWholeNumber(orders)}`;
+    } else if (secKey === 'customer') {
+        const mA = document.getElementById('expMonthA_customer')?.value || customerMonthA;
+        const mB = document.getElementById('expMonthB_customer')?.value || customerMonthB;
+        let rowA = (appData.customer || []).find(d => d['Reporting Month'] === mA);
+        let rowB = (appData.customer || []).find(d => d['Reporting Month'] === mB);
+        let revA = rowA ? (Number(rowA.new_customer_revenue || 0) + Number(rowA.repeat_customer_revenue || 0)) : 0;
+        let revB = rowB ? (Number(rowB.new_customer_revenue || 0) + Number(rowB.repeat_customer_revenue || 0)) : 0;
+        badge.textContent = `${formatMonthLabel(mA)} (${formatCurrency(revA)}) vs ${formatMonthLabel(mB)} (${formatCurrency(revB)})`;
+    } else if (secKey === 'shipping') {
+        const mA = document.getElementById('expMonthA_shipping')?.value || shippingMonthA;
+        const mB = document.getElementById('expMonthB_shipping')?.value || shippingMonthB;
+        let rowsA = (appData.shipping || []).filter(d => d['Reporting Month'] === mA);
+        let rowsB = (appData.shipping || []).filter(d => d['Reporting Month'] === mB);
+        let volA = rowsA.reduce((s, r) => s + (Number(r.order_count || r['Orders']) || 0), 0);
+        let volB = rowsB.reduce((s, r) => s + (Number(r.order_count || r['Orders']) || 0), 0);
+        badge.textContent = `${formatMonthLabel(mA)} (${formatWholeNumber(volA)} orders) vs ${formatMonthLabel(mB)} (${formatWholeNumber(volB)} orders)`;
+    } else if (secKey === 'product') {
+        const isRange = productCompRangeMode === 'range';
+        let lblA = "", lblB = "";
+        let dataA = [], dataB = [];
+        let catFilter = document.getElementById('expCategory_product')?.value || '';
+        let baseData = (appData.product || []);
+        if (catFilter) {
+            baseData = baseData.filter(d => getCategoryNames(d).includes(catFilter));
+        }
+
+        if (isRange) {
+            let sA = document.getElementById('expStartA_product')?.value || productCompStartA;
+            let eA = document.getElementById('expEndA_product')?.value || productCompEndA;
+            let sB = document.getElementById('expStartB_product')?.value || productCompStartB;
+            let eB = document.getElementById('expEndB_product')?.value || productCompEndB;
+            let mA = getMonthArrayBetween(sA, eA);
+            let mB = getMonthArrayBetween(sB, eB);
+            dataA = baseData.filter(d => mA.includes(d['Reporting Month']));
+            dataB = baseData.filter(d => mB.includes(d['Reporting Month']));
+            lblA = `${formatMonthLabel(sA)}–${formatMonthLabel(eA)}`;
+            lblB = `${formatMonthLabel(sB)}–${formatMonthLabel(eB)}`;
+        } else {
+            let mA = document.getElementById('expMonthA_product')?.value || productCompMonthA;
+            let mB = document.getElementById('expMonthB_product')?.value || productCompMonthB;
+            dataA = baseData.filter(d => d['Reporting Month'] === mA);
+            dataB = baseData.filter(d => d['Reporting Month'] === mB);
+            lblA = formatMonthLabel(mA);
+            lblB = formatMonthLabel(mB);
+        }
+        let revA = dataA.reduce((s, r) => s + (Number(r['N. Revenue']) || 0), 0);
+        let revB = dataB.reduce((s, r) => s + (Number(r['N. Revenue']) || 0), 0);
+        let diff = revA - revB;
+        let sign = diff >= 0 ? '+' : '';
+        badge.textContent = `${lblA} (${formatCurrency(revA)}) vs ${lblB} (${formatCurrency(revB)}) | Net: ${sign}${formatCurrency(diff)}`;
+    } else if (secKey === 'category') {
+        const mA = document.getElementById('expMonthA_category')?.value || categoryTableMonthA;
+        const mB = document.getElementById('expMonthB_category')?.value || categoryTableMonthB;
+        let dataA = (appData.product || []).filter(d => d['Reporting Month'] === mA);
+        let dataB = (appData.product || []).filter(d => d['Reporting Month'] === mB);
+        let revA = dataA.reduce((s, r) => s + (Number(r['N. Revenue']) || 0), 0);
+        let revB = dataB.reduce((s, r) => s + (Number(r['N. Revenue']) || 0), 0);
+        badge.textContent = `${formatMonthLabel(mA)} (${formatCurrency(revA)}) vs ${formatMonthLabel(mB)} (${formatCurrency(revB)})`;
+    } else if (secKey === 'basket') {
+        const fromVal = document.getElementById('expFrom_basket')?.value || dateRangeFrom;
+        const toVal = document.getElementById('expTo_basket')?.value || dateRangeTo;
+        badge.textContent = `Range: ${formatMonthLabel(fromVal)} to ${formatMonthLabel(toVal)}`;
+    } else if (secKey === 'payment') {
+        const mA = document.getElementById('expMonthA_payment')?.value || paymentMonthA;
+        const mB = document.getElementById('expMonthB_payment')?.value || paymentMonthB;
+        let rowsA = (appData.payment || []).filter(d => d['Reporting Month'] === mA);
+        let rowsB = (appData.payment || []).filter(d => d['Reporting Month'] === mB);
+        let revA = rowsA.reduce((s, r) => s + (Number(r.net_revenue || r['Revenue']) || 0), 0);
+        let revB = rowsB.reduce((s, r) => s + (Number(r.net_revenue || r['Revenue']) || 0), 0);
+        badge.textContent = `${formatMonthLabel(mA)} (${formatCurrency(revA)}) vs ${formatMonthLabel(mB)} (${formatCurrency(revB)})`;
+    }
+}
+
+async function executeCustomExportReport() {
+    const runBtn = document.getElementById('expRunBtn');
+    if (runBtn) {
+        runBtn.innerHTML = '⏳ Generating Report...';
+        runBtn.disabled = true;
+    }
+
+    const isInc = (key) => document.getElementById('expCheck_' + key)?.checked;
+
+    const enabledKeys = ['executive', 'customer', 'shipping', 'product', 'category', 'basket', 'payment'].filter(isInc);
+
+    if (enabledKeys.length === 0) {
+        alert("Please select at least one report section to include in the export.");
+        if (runBtn) {
+            runBtn.innerHTML = '🚀 Generate Custom Report';
+            runBtn.disabled = false;
+        }
+        return;
+    }
+
+    // Save live dashboard parameters so we can restore them perfectly after rendering export
+    const origState = {
+        dateRangeFrom, dateRangeTo,
+        customerMonthA, customerMonthB,
+        shippingMonthA, shippingMonthB,
+        productCompMonthA, productCompMonthB,
+        productCompRangeMode, productCompStartA, productCompEndA, productCompStartB, productCompEndB,
+        categoryTableMonthA, categoryTableMonthB,
+        paymentMonthA, paymentMonthB
+    };
+
+    // Temporarily show ALL tab content containers so Chart.js can render canvases
+    const allSections = document.querySelectorAll('.tab-content');
+    const originalDisplay = [];
+    allSections.forEach(sec => {
+        originalDisplay.push(sec.style.display);
+        sec.style.display = 'block';
+        sec.classList.add('active');
+    });
+
+    document.body.offsetHeight; // Force DOM reflow
+
+    // Apply custom parameters per enabled section and re-render that tab's dashboard
+    if (isInc('executive')) {
+        dateRangeFrom = document.getElementById('expFrom_executive')?.value || dateRangeFrom;
+        dateRangeTo = document.getElementById('expTo_executive')?.value || dateRangeTo;
+        if (appData.executive) updateExecutiveDashboard();
+    }
+    if (isInc('customer')) {
+        customerMonthA = document.getElementById('expMonthA_customer')?.value || customerMonthA;
+        customerMonthB = document.getElementById('expMonthB_customer')?.value || customerMonthB;
+        dateRangeFrom = document.getElementById('expFrom_customer')?.value || dateRangeFrom;
+        dateRangeTo = document.getElementById('expTo_customer')?.value || dateRangeTo;
+        if (appData.customer || appData.aiReferral) updateCustomerDashboard();
+    }
+    if (isInc('shipping')) {
+        shippingMonthA = document.getElementById('expMonthA_shipping')?.value || shippingMonthA;
+        shippingMonthB = document.getElementById('expMonthB_shipping')?.value || shippingMonthB;
+        dateRangeFrom = document.getElementById('expFrom_shipping')?.value || dateRangeFrom;
+        dateRangeTo = document.getElementById('expTo_shipping')?.value || dateRangeTo;
+        if (appData.shipping) updateShippingDashboard();
+    }
+    if (isInc('product')) {
+        productCompMonthA = document.getElementById('expMonthA_product')?.value || productCompMonthA;
+        productCompMonthB = document.getElementById('expMonthB_product')?.value || productCompMonthB;
+        productCompStartA = document.getElementById('expStartA_product')?.value || productCompStartA;
+        productCompEndA = document.getElementById('expEndA_product')?.value || productCompEndA;
+        productCompStartB = document.getElementById('expStartB_product')?.value || productCompStartB;
+        productCompEndB = document.getElementById('expEndB_product')?.value || productCompEndB;
+        if (appData.product) updateProductDashboard();
+    }
+    if (isInc('category')) {
+        categoryTableMonthA = document.getElementById('expMonthA_category')?.value || categoryTableMonthA;
+        categoryTableMonthB = document.getElementById('expMonthB_category')?.value || categoryTableMonthB;
+        if (appData.product) updateCategoryDashboard();
+    }
+    if (isInc('basket')) {
+        dateRangeFrom = document.getElementById('expFrom_basket')?.value || dateRangeFrom;
+        dateRangeTo = document.getElementById('expTo_basket')?.value || dateRangeTo;
+        if (appData.basket || appData.basketProject) updateBasketDashboard();
+    }
+    if (isInc('payment')) {
+        paymentMonthA = document.getElementById('expMonthA_payment')?.value || paymentMonthA;
+        paymentMonthB = document.getElementById('expMonthB_payment')?.value || paymentMonthB;
+        if (appData.payment) updatePaymentDashboard();
+    }
+
+    // Wait for Chart.js animation paint cycles
+    await new Promise(r => setTimeout(r, 1200));
+
+    // Master tab structure definitions
+    const allTabDefinitions = [
         {
-            id: 'tab-executive', name: 'Executive Summary',
+            key: 'executive', id: 'tab-executive', name: 'Executive Summary',
             kpis: [
-                { label: 'Total Revenue', id: 'kpi-revenue', trendId: 'kpi-revenue-trend', desc: 'Total net revenue for the most recent month in the selected date range.' },
-                { label: 'Total Orders', id: 'kpi-orders', trendId: 'kpi-orders-trend', desc: 'Total number of completed orders in the most recent month.' },
-                { label: 'AOV', id: 'kpi-aov', trendId: 'kpi-aov-trend', desc: 'Average Order Value — total revenue divided by total orders for the latest month.' }
+                { label: 'Total Revenue', id: 'kpi-revenue', trendId: 'kpi-revenue-trend', desc: 'Total net revenue for the selected date range.' },
+                { label: 'Total Orders', id: 'kpi-orders', trendId: 'kpi-orders-trend', desc: 'Total number of completed orders.' },
+                { label: 'AOV', id: 'kpi-aov', trendId: 'kpi-aov-trend', desc: 'Average Order Value.' }
             ],
             charts: [
-                { id: 'executiveTrendChart', title: 'Revenue & Orders Trend', desc: 'Dual-axis line chart tracking total revenue (left axis, £) and total orders (right axis) over the selected date range.' }
+                { id: 'executiveTrendChart', title: 'Revenue & Orders Trend', desc: 'Dual-axis line chart tracking total revenue and total orders.' }
             ],
             tables: []
         },
         {
-            id: 'tab-customer', name: 'Customer Split',
+            key: 'customer', id: 'tab-customer', name: 'Customer Split & AI Acquisition',
             kpis: [],
             charts: [
-                { id: 'repeatNewOrdersChart', title: 'New vs Repeat Orders', desc: 'Donut chart showing the proportion of orders from first-time customers versus returning customers for the selected month.' },
-                { id: 'customerRevenueChart', title: 'Revenue by Customer Type', desc: 'Stacked bar comparing total revenue generated by new vs repeat customers across both selected comparison months.' },
-                { id: 'customerTrendChart', title: 'Customer Trend Over Time', desc: 'Line chart tracking revenue from new and repeat customers separately across the full date range to identify retention trends.' },
-                { id: 'customerAovChart', title: 'AOV Comparison', desc: 'Bar chart comparing the Average Order Value of new vs repeat customers for both selected comparison months.' },
-                { id: 'aiReferralTrendChart', title: 'AI Referral Acquisition Trend', desc: 'Line chart tracking monthly order referrals from AI recommendations (e.g., Gemini, ChatGPT, Claude) over the date range.' }
+                { id: 'repeatNewOrdersChart', title: 'New vs Repeat Orders', desc: 'Donut chart showing first-time vs returning customer order proportions.' },
+                { id: 'customerRevenueChart', title: 'Revenue by Customer Type', desc: 'Stacked bar comparing revenue by customer type across comparison months.' },
+                { id: 'customerTrendChart', title: 'Customer Trend Over Time', desc: 'Line chart tracking new vs repeat revenue over time.' },
+                { id: 'customerAovChart', title: 'AOV Comparison', desc: 'AOV breakdown by customer type.' },
+                { id: 'aiReferralTrendChart', title: 'AI Referral Acquisition Trend', desc: 'Monthly orders referred by AI recommendation engines.' }
             ],
             tables: [
-                { id: 'aiReferralTable', title: 'AI Engine Breakdown', desc: 'Summary of orders, revenue, and AOV generated by each AI engine.' }
+                { id: 'aiReferralTable', title: 'AI Engine Breakdown', desc: 'Orders, revenue, and AOV generated by each AI engine.' }
             ]
         },
         {
-            id: 'tab-shipping', name: 'Shipping & Delivery',
+            key: 'shipping', id: 'tab-shipping', name: 'Shipping & Delivery',
             kpis: [],
             charts: [
-                { id: 'shippingTrendChart', title: 'Shipping Volume Trend', desc: 'Multi-line chart showing monthly order volumes split by each shipping/fulfillment method over the date range.' },
-                { id: 'fulfillmentVolumeChart', title: 'Fulfillment Methods (Volume)', desc: 'Donut chart showing the share of total orders handled by each fulfillment method for the selected comparison month.' },
-                { id: 'fulfillmentRevenueChart', title: 'Shipping Revenue Collected', desc: 'Donut chart showing how much shipping revenue each fulfillment method generated for the selected month.' },
-                { id: 'orderRevenueByMethodChart', title: 'Total Order Revenue by Method', desc: 'Stacked bar chart comparing total order revenue (not just shipping fees) attributed to each delivery method across both comparison months.' }
+                { id: 'shippingTrendChart', title: 'Shipping Volume Trend', desc: 'Monthly order volumes split by shipping method.' },
+                { id: 'fulfillmentVolumeChart', title: 'Fulfillment Methods (Volume)', desc: 'Share of total orders handled by each method.' },
+                { id: 'fulfillmentRevenueChart', title: 'Shipping Revenue Collected', desc: 'Shipping fees collected per fulfillment method.' },
+                { id: 'orderRevenueByMethodChart', title: 'Total Order Revenue by Method', desc: 'Total order revenue attributed to each delivery method.' }
             ],
             tables: []
         },
         {
-            id: 'tab-product', name: 'Product Performance',
+            key: 'product', id: 'tab-product', name: 'Product Performance & Variance Engine',
             kpis: [],
             summaryCards: [
                 { label: 'Total Revenue', id: 'productTrendTotalRevenue' },
@@ -1320,27 +1630,17 @@ async function exportFullReport() {
                 { label: 'Avg Units Per Month', id: 'productTrendAvgUnits' }
             ],
             charts: [
-                { id: 'productTrendChart', title: 'Product Sales Trend', desc: 'Line chart showing revenue and units sold for the selected product (or all products) over the date range.' }
+                { id: 'productTrendChart', title: 'Product Sales Trend', desc: 'Revenue and units sold for selected catalog products.' }
             ],
             tables: [
-                { id: 'productTableA', title: 'Top Performers (Month A)', desc: 'Ranked table of products by revenue for the first selected month, with MoM and YoY comparisons.' },
-                { id: 'productTableB', title: 'Top Performers (Month B)', desc: 'Ranked table of products by revenue for the second selected month, with MoM and YoY comparisons.' },
-                { id: 'productRisingStars', title: 'Rising Stars (Biggest £ Gains)', desc: 'Products with the largest absolute revenue increase between the previous month and the current month.' },
-                { id: 'productFallingStars', title: 'Falling Stars (Biggest £ Drops)', desc: 'Products with the largest absolute revenue decrease between the previous month and the current month.' }
+                { id: 'productTableA', title: 'Top Performers (Month A / Period A)', desc: 'Ranked table of products by net revenue.' },
+                { id: 'productTableB', title: 'Top Performers (Month B / Period B)', desc: 'Ranked table of products for comparison period.' },
+                { id: 'productRisingStars', title: 'Rising Stars (Biggest £ Gains)', desc: 'Products with the largest revenue gain.' },
+                { id: 'productFallingStars', title: 'Falling Stars (Biggest £ Drops)', desc: 'Products with the largest revenue drop.' }
             ]
         },
         {
-            id: 'tab-productsales', name: 'Product Sales',
-            kpis: [],
-            charts: [
-                { id: 'productSalesTrendChart', title: 'Product Sales Trend', desc: 'Dual-axis line chart showing revenue and units sold for the selected product.' }
-            ],
-            tables: [
-                { id: 'productSalesTable', title: 'Product Sales Catalogue', desc: 'Ranked list of products sold over the selected date range, including units, revenue, and average unit price.' }
-            ]
-        },
-        {
-            id: 'tab-category', name: 'Category Performance',
+            key: 'category', id: 'tab-category', name: 'Category Performance',
             kpis: [],
             summaryCards: [
                 { label: 'Total Revenue', id: 'categoryTrendTotalRevenue' },
@@ -1349,80 +1649,47 @@ async function exportFullReport() {
                 { label: 'Avg Units Per Month', id: 'categoryTrendAvgUnits' }
             ],
             charts: [
-                { id: 'categoryTrendChart', title: 'Category Sales Trend', desc: 'Line chart showing revenue and units sold for the selected category (or all categories) over the date range. Products are attributed via the hierarchy CSV.' }
+                { id: 'categoryTrendChart', title: 'Category Sales Trend', desc: 'Line chart showing category performance over time.' }
             ],
             tables: [
-                { id: 'categoryTableA', title: 'Top Categories (Month A)', desc: 'Ranked table of categories by revenue for the first selected month, with MoM and YoY comparisons.' },
-                { id: 'categoryTableB', title: 'Top Categories (Month B)', desc: 'Ranked table of categories by revenue for the second selected month, with MoM and YoY comparisons.' },
-                { id: 'categoryRisingStars', title: 'Rising Stars (Biggest £ Gains)', desc: 'Categories with the largest absolute revenue increase between the previous month and the current month.' },
-                { id: 'categoryFallingStars', title: 'Falling Stars (Biggest £ Drops)', desc: 'Categories with the largest absolute revenue decrease between the previous month and the current month.' }
+                { id: 'categoryTableA', title: 'Top Categories (Month A)', desc: 'Ranked table of categories by revenue.' },
+                { id: 'categoryTableB', title: 'Top Categories (Month B)', desc: 'Ranked comparison table.' }
             ]
         },
         {
-            id: 'tab-basket', name: 'Basket Analysis',
+            key: 'basket', id: 'tab-basket', name: 'Basket Analysis & Cross-Selling',
             kpis: [],
             inlineMetrics: [
-                { label: 'Project AOV', id: 'projectAovMetric', desc: 'Average order value for baskets classified as projects (>3 unique items or >15 total units).' },
-                { label: 'Maintenance AOV', id: 'maintenanceAovMetric', desc: 'Average order value for baskets classified as maintenance (≤3 unique items and ≤15 units).' }
+                { label: 'Project AOV', id: 'projectAovMetric', desc: 'Average order value for project orders.' },
+                { label: 'Maintenance AOV', id: 'maintenanceAovMetric', desc: 'Average order value for single item/maintenance purchases.' }
             ],
             charts: [
-                { id: 'basketAovTrendChart', title: 'Average Basket Value Over Time', desc: 'Tracks the Average Order Value (AOV) of orders over time, filtered to orders containing at least one item from the selected category.' },
-                { id: 'basketTopPairsChart', title: 'Top 10 Most Paired Products', desc: 'Horizontal bar chart showing the 10 product pairs most frequently purchased together in the same order.' },
-                { id: 'basketDistChart', title: 'Pair Frequency Distribution', desc: 'Distribution chart showing how many product pairs occur at each frequency level — helps identify whether cross-selling is concentrated or broad.' },
-                { id: 'basketProjectSplitChart', title: 'Project vs. Maintenance Baskets', desc: 'Categorizes baskets based on item quantity/variety to show if orders are typically large projects or single-item maintenance purchases.' },
-                { id: 'crossCategoryGauge', title: 'Cross-Category Penetration Rate', desc: 'Shows the percentage of orders containing items from more than one distinct top-level category.' },
-                { id: 'aovMultipliersChart', title: 'Top AOV Multipliers', desc: 'Highlights individual products that, when included in a basket, result in the highest total Average Order Value.' }
+                { id: 'basketAovTrendChart', title: 'Average Basket Value Over Time', desc: 'Tracks basket value over time.' },
+                { id: 'basketTopPairsChart', title: 'Top 10 Most Paired Products', desc: 'Product pairs most frequently bought together.' },
+                { id: 'basketDistChart', title: 'Pair Frequency Distribution', desc: 'Distribution of cross-sell pair frequency.' },
+                { id: 'basketProjectSplitChart', title: 'Project vs. Maintenance Baskets', desc: 'Basket classification breakdown.' }
             ],
             tables: [
-                { id: 'consumableVelocityTable', title: 'Consumable Reorder Rates', desc: 'Tracks specific consumable items to show how many days it typically takes for customers to purchase them again.' },
-                { id: 'basketTable', title: 'Product Pairings', desc: 'Full table of every product pair and how many times they were bought together.' }
+                { id: 'consumableVelocityTable', title: 'Consumable Reorder Rates', desc: 'Reorder velocity for key consumables.' },
+                { id: 'basketTable', title: 'Product Pairings', desc: 'Complete table of product pairings.' }
             ]
         },
         {
-            id: 'tab-payment', name: 'Payment Methods',
+            key: 'payment', id: 'tab-payment', name: 'Payment Methods & Gateway Split',
             kpis: [],
             charts: [
-                { id: 'paymentTrendChart', title: 'Payment Revenue Trend', desc: 'Multi-line chart tracking total revenue processed through each payment gateway over the date range.' },
-                { id: 'paymentPieChart', title: 'Revenue Split (Month A)', desc: 'Pie chart showing the percentage of total revenue handled by each payment gateway for the selected month.' },
-                { id: 'paymentPieChartB', title: 'Revenue Split (Month B)', desc: 'Pie chart for the second comparison month — compare side-by-side with the first to spot payment method shifts.' }
+                { id: 'paymentTrendChart', title: 'Payment Revenue Trend', desc: 'Revenue processed through each gateway over time.' },
+                { id: 'paymentPieChart', title: 'Revenue Split (Month A)', desc: 'Percentage of revenue handled per payment gateway.' },
+                { id: 'paymentPieChartB', title: 'Revenue Split (Month B)', desc: 'Payment split for comparison target month.' }
             ],
             tables: [
-                { id: 'paymentHistoryTable', title: 'Gateway Comparison', desc: 'Table comparing order counts and revenue totals for each payment gateway across both selected comparison months.' }
+                { id: 'paymentHistoryTable', title: 'Gateway Comparison', desc: 'Order counts and net revenue totals per payment gateway.' }
             ]
         }
     ];
 
-    // Temporarily show ALL tab sections so canvases have real dimensions
-    const allSections = document.querySelectorAll('.tab-content');
-    const originalDisplay = [];
-    allSections.forEach(section => {
-        originalDisplay.push(section.style.display);
-        section.style.display = 'block';
-        section.classList.add('active');
-    });
+    const activeTabs = allTabDefinitions.filter(t => isInc(t.key));
 
-    // Force a reflow so containers get real dimensions
-    document.body.offsetHeight;
-
-    // Re-render ALL dashboards while tabs are visible.
-    // This is critical — Chart.js skips rendering on hidden canvases,
-    // so charts on unvisited tabs were never drawn at all.
-    if (appData.executive) updateExecutiveDashboard();
-    if (appData.customer || appData.aiReferral) updateCustomerDashboard();
-    if (appData.shipping) updateShippingDashboard();
-    if (appData.product) {
-        updateProductDashboard();
-        updateCategoryDashboard();
-    }
-    if (appData.basket || appData.basketProject || appData.basketConsumables || appData.basketAnchors || appData.basketCrossCategory) {
-        updateBasketDashboard();
-    }
-    if (appData.payment) updatePaymentDashboard();
-
-    // Wait for Chart.js animation frames to complete painting
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Helper: capture a chart canvas as a data URL
     function captureChart(canvasId) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !canvas.getContext) return null;
@@ -1434,12 +1701,10 @@ async function exportFullReport() {
         }
     }
 
-    // Helper: extract a table as an HTML string
     function captureTable(tableId) {
         const table = document.getElementById(tableId);
         if (!table) return null;
         const clone = table.cloneNode(true);
-        // Strip sort arrows from headers for cleanliness
         clone.querySelectorAll('th').forEach(th => {
             th.removeAttribute('data-sort');
             th.removeAttribute('style');
@@ -1447,28 +1712,24 @@ async function exportFullReport() {
         return clone.outerHTML;
     }
 
-    // Build the report
-    const dateFrom = document.getElementById('globalDateFrom')?.value || '';
-    const dateTo = document.getElementById('globalDateTo')?.value || '';
-    const now = new Date().toLocaleString();
+    const nowStr = new Date().toLocaleString();
 
     let html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Briants Monthly Report - Export ${now}</title>
+<title>Briants Custom Monthly Report - ${nowStr}</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; color: #373737; background: #fff; padding: 2rem; max-width: 1200px; margin: 0 auto; line-height: 1.5; }
 h1 { font-size: 2rem; color: #009640; margin-bottom: 0.5rem; }
 .meta { color: #64748B; font-size: 0.9rem; margin-bottom: 2rem; border-bottom: 2px solid #E2E8F0; padding-bottom: 1rem; }
 .tab-section { margin-bottom: 3rem; page-break-inside: avoid; }
-.tab-title { font-size: 1.5rem; color: #fff; background: #009640; padding: 0.75rem 1.25rem; border-radius: 6px; margin-bottom: 1.5rem; }
+.tab-title { font-size: 1.4rem; color: #fff; background: #1E293B; padding: 0.75rem 1.25rem; border-radius: 6px; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; }
 .kpi-row { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .kpi-box { flex: 1; min-width: 180px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem; text-align: center; border-top: 3px solid #009640; }
 .kpi-label { font-size: 0.8rem; color: #64748B; text-transform: uppercase; font-weight: 600; }
 .kpi-val { font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0; }
-.kpi-trend { font-size: 0.85rem; }
 .chart-block { margin-bottom: 1.5rem; }
 .chart-block h4 { margin-bottom: 0.5rem; color: #475569; }
 .chart-block img { max-width: 100%; border: 1px solid #E2E8F0; border-radius: 6px; }
@@ -1481,23 +1742,25 @@ tr:nth-child(even) td { background: #FAFBFC; }
 .summary-card { flex: 1; min-width: 140px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 0.75rem; }
 .summary-card .label { font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; }
 .summary-card .value { font-size: 1.1rem; font-weight: 700; }
-.no-data { color: #94A3B8; font-style: italic; margin-bottom: 1rem; }
 .desc { font-size: 0.8rem; color: #64748B; font-style: italic; margin: 0.25rem 0 0.75rem 0; line-height: 1.4; }
 </style>
 </head>
 <body>
-<h1>Briants Monthly Report Dashboard</h1>
+<h1>Briants Custom Monthly Report</h1>
 <div class="meta">
-    <strong>Date Range:</strong> ${dateFrom || 'N/A'} to ${dateTo || 'N/A'} &nbsp;|&nbsp; 
-    <strong>Exported:</strong> ${now}
+    <strong>Exported On:</strong> ${nowStr} &nbsp;|&nbsp; 
+    <strong>Sections Included:</strong> ${activeTabs.length} of ${allTabDefinitions.length}
 </div>
 `;
 
-    tabs.forEach(tab => {
+    activeTabs.forEach(tab => {
+        const badgeText = document.getElementById('expBadge_' + tab.key)?.textContent || '';
         html += `<div class="tab-section">
-<h2 class="tab-title">${tab.name}</h2>\n`;
+<div class="tab-title">
+    <span>${tab.name}</span>
+    <span style="font-size:0.75rem; background:rgba(255,255,255,0.15); padding:0.2rem 0.6rem; border-radius:4px; font-weight:normal;">${badgeText}</span>
+</div>\n`;
 
-        // KPIs
         if (tab.kpis && tab.kpis.length > 0) {
             html += `<div class="kpi-row">\n`;
             tab.kpis.forEach(k => {
@@ -1513,7 +1776,6 @@ tr:nth-child(even) td { background: #FAFBFC; }
             html += `</div>\n`;
         }
 
-        // Summary cards (product/category trend summaries)
         if (tab.summaryCards && tab.summaryCards.length > 0) {
             html += `<div class="summary-row">\n`;
             tab.summaryCards.forEach(sc => {
@@ -1526,7 +1788,6 @@ tr:nth-child(even) td { background: #FAFBFC; }
             html += `</div>\n`;
         }
 
-        // Inline metrics (basket AOVs)
         if (tab.inlineMetrics && tab.inlineMetrics.length > 0) {
             html += `<div class="kpi-row">\n`;
             tab.inlineMetrics.forEach(m => {
@@ -1540,7 +1801,6 @@ tr:nth-child(even) td { background: #FAFBFC; }
             html += `</div>\n`;
         }
 
-        // Charts
         if (tab.charts) {
             tab.charts.forEach(c => {
                 const dataUrl = captureChart(c.id);
@@ -1554,7 +1814,6 @@ tr:nth-child(even) td { background: #FAFBFC; }
             });
         }
 
-        // Tables
         if (tab.tables) {
             tab.tables.forEach(t => {
                 const tableHtml = captureTable(t.id);
@@ -1575,23 +1834,52 @@ tr:nth-child(even) td { background: #FAFBFC; }
 
     html += `</body></html>`;
 
-    // Download
+    // Download compiled report
     const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Briants_Report_${dateFrom}_to_${dateTo}_${new Date().toISOString().split('T')[0]}.html`;
+    a.download = `Briants_Custom_Report_${new Date().toISOString().split('T')[0]}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    // Restore original tab visibility
-    allSections.forEach((section, i) => {
-        section.style.display = originalDisplay[i];
-        section.classList.remove('active');
+    // Restore original saved UI state and re-render live dashboard
+    dateRangeFrom = origState.dateRangeFrom;
+    dateRangeTo = origState.dateRangeTo;
+    customerMonthA = origState.customerMonthA;
+    customerMonthB = origState.customerMonthB;
+    shippingMonthA = origState.shippingMonthA;
+    shippingMonthB = origState.shippingMonthB;
+    productCompMonthA = origState.productCompMonthA;
+    productCompMonthB = origState.productCompMonthB;
+    productCompRangeMode = origState.productCompRangeMode;
+    productCompStartA = origState.productCompStartA;
+    productCompEndA = origState.productCompEndA;
+    productCompStartB = origState.productCompStartB;
+    productCompEndB = origState.productCompEndB;
+    categoryTableMonthA = origState.categoryTableMonthA;
+    categoryTableMonthB = origState.categoryTableMonthB;
+    paymentMonthA = origState.paymentMonthA;
+    paymentMonthB = origState.paymentMonthB;
+
+    if (appData.executive) updateExecutiveDashboard();
+    if (appData.customer || appData.aiReferral) updateCustomerDashboard();
+    if (appData.shipping) updateShippingDashboard();
+    if (appData.product) {
+        updateProductDashboard();
+        updateCategoryDashboard();
+    }
+    if (appData.basket || appData.basketProject) updateBasketDashboard();
+    if (appData.payment) updatePaymentDashboard();
+
+    // Restore tab visibility
+    allSections.forEach((sec, i) => {
+        sec.style.display = originalDisplay[i];
+        sec.classList.remove('active');
     });
-    // Re-activate whichever tab was originally active
+
     const activeBtn = document.querySelector('.tab-btn.active');
     if (activeBtn) {
         const targetId = activeBtn.getAttribute('data-target');
@@ -1599,9 +1887,11 @@ tr:nth-child(even) td { background: #FAFBFC; }
         if (targetEl) targetEl.classList.add('active');
     }
 
-    if (exportBtn) {
-        exportBtn.innerHTML = originalBtnText;
-        exportBtn.disabled = false;
+    closeExportReportModal();
+
+    if (runBtn) {
+        runBtn.innerHTML = '🚀 Generate Custom Report';
+        runBtn.disabled = false;
     }
 }
 
